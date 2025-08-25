@@ -14,7 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      drivers: {
+        Row: {
+          car_model: string
+          created_at: string
+          id: string
+          is_available: boolean
+          name: string
+          phone: string
+          photo_url: string | null
+          plate_number: string
+          rating: number | null
+        }
+        Insert: {
+          car_model: string
+          created_at?: string
+          id?: string
+          is_available?: boolean
+          name: string
+          phone: string
+          photo_url?: string | null
+          plate_number: string
+          rating?: number | null
+        }
+        Update: {
+          car_model?: string
+          created_at?: string
+          id?: string
+          is_available?: boolean
+          name?: string
+          phone?: string
+          photo_url?: string | null
+          plate_number?: string
+          rating?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rides: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          driver_id: string | null
+          dropoff_latitude: number | null
+          dropoff_location: string
+          dropoff_longitude: number | null
+          estimated_price: number
+          final_price: number | null
+          id: string
+          notes: string | null
+          pickup_latitude: number | null
+          pickup_location: string
+          pickup_longitude: number | null
+          rating: number | null
+          scheduled_time: string | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["ride_status"]
+          updated_at: string
+          user_id: string
+          vehicle_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          driver_id?: string | null
+          dropoff_latitude?: number | null
+          dropoff_location: string
+          dropoff_longitude?: number | null
+          estimated_price: number
+          final_price?: number | null
+          id?: string
+          notes?: string | null
+          pickup_latitude?: number | null
+          pickup_location: string
+          pickup_longitude?: number | null
+          rating?: number | null
+          scheduled_time?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["ride_status"]
+          updated_at?: string
+          user_id: string
+          vehicle_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          driver_id?: string | null
+          dropoff_latitude?: number | null
+          dropoff_location?: string
+          dropoff_longitude?: number | null
+          estimated_price?: number
+          final_price?: number | null
+          id?: string
+          notes?: string | null
+          pickup_latitude?: number | null
+          pickup_location?: string
+          pickup_longitude?: number | null
+          rating?: number | null
+          scheduled_time?: string | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["ride_status"]
+          updated_at?: string
+          user_id?: string
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rides_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicles: {
+        Row: {
+          base_price: number
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          is_available: boolean
+          name: string
+          price_per_km: number
+          type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Insert: {
+          base_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name: string
+          price_per_km: number
+          type: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Update: {
+          base_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_available?: boolean
+          name?: string
+          price_per_km?: number
+          type?: Database["public"]["Enums"]["vehicle_type"]
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +205,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      ride_status:
+        | "pending"
+        | "confirmed"
+        | "driver_assigned"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
+      vehicle_type: "sedan" | "suv" | "limousine" | "luxury_sedan"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +339,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      ride_status: [
+        "pending",
+        "confirmed",
+        "driver_assigned",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ],
+      vehicle_type: ["sedan", "suv", "limousine", "luxury_sedan"],
+    },
   },
 } as const
