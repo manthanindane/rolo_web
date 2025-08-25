@@ -1,13 +1,13 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/layout/BottomNav';
-import { useRoloStore } from '@/store/useRoloStore';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { MapPin, Clock, Star, Car, ArrowLeft } from 'lucide-react';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { useNavigate } from 'react-router-dom';
 
 export default function RideHistory() {
   const navigate = useNavigate();
-  const { rides } = useRoloStore();
+  const { rides, loading } = useSupabaseData();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -34,6 +34,17 @@ export default function RideHistory() {
         return status;
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading ride history...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -73,17 +84,17 @@ export default function RideHistory() {
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">{ride.pickup}</span>
+                          <span className="text-sm font-medium">{ride.pickup_location}</span>
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span className="text-sm">{ride.dropoff}</span>
+                          <span className="text-sm">{ride.dropoff_location}</span>
                         </div>
                       </div>
                     </div>
                     
                     <div className="text-right">
-                      <p className="font-bold text-lg">${ride.price}</p>
+                      <p className="font-bold text-lg">${ride.final_price || ride.estimated_price}</p>
                       <p className="text-sm text-muted-foreground">{ride.vehicle.name}</p>
                     </div>
                   </div>
@@ -92,7 +103,7 @@ export default function RideHistory() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
-                        {ride.date}
+                        {new Date(ride.created_at).toLocaleDateString()}
                       </div>
                       {ride.rating && (
                         <div className="flex items-center gap-1">

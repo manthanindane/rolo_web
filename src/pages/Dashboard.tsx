@@ -3,14 +3,27 @@ import { LuxuryButton } from '@/components/ui/luxury-button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/layout/BottomNav';
-import { useRoloStore } from '@/store/useRoloStore';
+import { useAuth } from '@/hooks/useAuth';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { Search, MapPin, Clock, Star, Car } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, rides } = useRoloStore();
+  const { user } = useAuth();
+  const { rides, profile, loading } = useSupabaseData();
   
   const recentRides = rides.slice(0, 3);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -18,7 +31,9 @@ export default function Dashboard() {
       <div className="p-6 bg-gradient-subtle">
         <div className="animate-fade-in">
           <h1 className="text-2xl font-bold mb-1">Good morning,</h1>
-          <p className="text-xl text-muted-foreground">{user?.name}</p>
+          <p className="text-xl text-muted-foreground">
+            {profile?.full_name || user?.email?.split('@')[0] || 'there'}
+          </p>
         </div>
       </div>
 
@@ -59,16 +74,16 @@ export default function Dashboard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <MapPin className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">{ride.pickup}</span>
+                          <span className="text-sm font-medium">{ride.pickup_location}</span>
                         </div>
                         <div className="flex items-center gap-2 text-muted-foreground">
                           <MapPin className="h-4 w-4" />
-                          <span className="text-sm">{ride.dropoff}</span>
+                          <span className="text-sm">{ride.dropoff_location}</span>
                         </div>
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                           <div className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {ride.date}
+                            {new Date(ride.created_at).toLocaleDateString()}
                           </div>
                           {ride.rating && (
                             <div className="flex items-center gap-1">
@@ -80,7 +95,7 @@ export default function Dashboard() {
                       </div>
                       
                       <div className="text-right">
-                        <p className="font-semibold">${ride.price}</p>
+                        <p className="font-semibold">${ride.final_price || ride.estimated_price}</p>
                         <p className="text-sm text-muted-foreground">{ride.vehicle.name}</p>
                       </div>
                     </div>

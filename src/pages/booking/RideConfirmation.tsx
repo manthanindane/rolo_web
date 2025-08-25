@@ -1,28 +1,65 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useRoloStore } from '@/store/useRoloStore';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
+import { useToast } from '@/hooks/use-toast';
 import { ArrowLeft, MapPin, Car, Clock, CreditCard } from 'lucide-react';
 
 export default function RideConfirmation() {
   const navigate = useNavigate();
-  const { bookingFlow, createRide, setCurrentBooking } = useRoloStore();
+  const { bookingFlow, setCurrentBooking } = useRoloStore();
+  const { createRide } = useSupabaseData();
+  const { toast } = useToast();
+  const [isBooking, setIsBooking] = useState(false);
 
-  const handleConfirmBooking = () => {
-    if (!bookingFlow.selectedVehicle) return;
-    
-    const newRide = {
-      pickup: bookingFlow.pickup,
-      dropoff: bookingFlow.dropoff,
-      vehicle: bookingFlow.selectedVehicle,
-      price: bookingFlow.estimatedPrice || bookingFlow.selectedVehicle.price,
-      status: 'upcoming' as const,
-      date: new Date().toISOString().split('T')[0]
-    };
-    
-    createRide(newRide);
-    setCurrentBooking({ ...newRide, id: Math.random().toString(36) });
-    navigate('/booking/searching');
+  const handleConfirmBooking = async () => {
+    if (!bookingFlow.selectedVehicle || !bookingFlow.estimatedPrice) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Please select a vehicle first",
+      });
+      return;
+    }
+
+    setIsBooking(true);
+
+    try {
+      const { data, error } = await createRide({
+        pickup_location: bookingFlow.pickup,
+        dropoff_location: bookingFlow.dropoff,
+        vehicle_id: bookingFlow.selectedVehicle.id,
+        estimated_price: bookingFlow.estimatedPrice
+      });
+
+      if (error) {
+        toast({
+          variant: "destructive",
+          title: "Booking Failed",
+          description: error.message,
+        });
+        return;
+      }
+
+      if (data) {
+        setCurrentBooking(data);
+        toast({
+          title: "Ride Booked!",
+          description: "Finding your driver...",
+        });
+        navigate('/booking/searching');
+      }
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Booking Failed",
+        description: "Something went wrong. Please try again.",
+      });
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   if (!bookingFlow.selectedVehicle) {
@@ -97,7 +134,7 @@ export default function RideConfirmation() {
               </div>
               
               <div className="text-right">
-                <p className="text-2xl font-bold">${bookingFlow.selectedVehicle.price}</p>
+                <p className="text-2xl font-bold">${bookingFlow.estimatedPrice}</p>
                 <p className="text-sm text-muted-foreground">Estimated fare</p>
               </div>
             </div>
@@ -129,10 +166,11 @@ export default function RideConfirmation() {
       <div className="pt-6">
         <LuxuryButton
           onClick={handleConfirmBooking}
+          disabled={isBooking}
           className="w-full"
           size="lg"
         >
-          Confirm Booking
+          {isBooking ? 'Booking...' : 'Confirm Booking'}
         </LuxuryButton>
         
         <p className="text-xs text-center text-muted-foreground mt-3">

@@ -1,47 +1,48 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useRoloStore } from '@/store/useRoloStore';
+import { useAuth } from '@/hooks/useAuth';
 import { ArrowLeft } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
-  const { login } = useRoloStore();
+  const { signIn, signUp, user } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Mock authentication
-    const mockUser = {
-      id: '1',
-      name: name || 'John Doe',
-      email: email || 'john@example.com',
-      phone: '+1 (555) 123-4567'
-    };
-    
-    login(mockUser);
-    navigate('/dashboard');
-  };
+    setLoading(true);
 
-  const handleSocialLogin = (provider: string) => {
-    // Mock social login
-    const mockUser = {
-      id: '1',
-      name: 'John Doe',
-      email: 'john@example.com',
-      phone: '+1 (555) 123-4567'
-    };
-    
-    login(mockUser);
-    navigate('/dashboard');
+    try {
+      if (isLogin) {
+        const { error } = await signIn(email, password);
+        if (!error) {
+          navigate('/dashboard');
+        }
+      } else {
+        const { error } = await signUp(email, password, fullName);
+        if (!error) {
+          setIsLogin(true); // Switch to login view after successful signup
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -71,13 +72,14 @@ export default function Auth() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="fullName">Full Name</Label>
                   <Input
-                    id="name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
                     className="input-luxury"
                     placeholder="Enter your full name"
+                    required={!isLogin}
                   />
                 </div>
               )}
@@ -91,6 +93,7 @@ export default function Auth() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="input-luxury"
                   placeholder="Enter your email"
+                  required
                 />
               </div>
               
@@ -103,11 +106,13 @@ export default function Auth() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="input-luxury"
                   placeholder="Enter your password"
+                  required
+                  minLength={6}
                 />
               </div>
               
-              <LuxuryButton type="submit" className="w-full">
-                {isLogin ? 'Sign In' : 'Create Account'}
+              <LuxuryButton type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
               </LuxuryButton>
             </form>
             
@@ -126,17 +131,17 @@ export default function Auth() {
               <LuxuryButton
                 variant="outline"
                 className="w-full"
-                onClick={() => handleSocialLogin('google')}
+                disabled
               >
-                Continue with Google
+                Continue with Google (Coming Soon)
               </LuxuryButton>
               
               <LuxuryButton
                 variant="outline"
                 className="w-full"
-                onClick={() => handleSocialLogin('apple')}
+                disabled
               >
-                Continue with Apple
+                Continue with Apple (Coming Soon)
               </LuxuryButton>
             </div>
             

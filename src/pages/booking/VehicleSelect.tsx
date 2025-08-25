@@ -3,22 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useRoloStore } from '@/store/useRoloStore';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { ArrowLeft, Car, Users, Clock, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function VehicleSelect() {
   const navigate = useNavigate();
-  const { vehicles, bookingFlow, updateBookingFlow } = useRoloStore();
+  const { vehicles, loading } = useSupabaseData();
+  const { bookingFlow, updateBookingFlow } = useRoloStore();
   
   const [selectedVehicle, setSelectedVehicle] = useState(bookingFlow.selectedVehicle?.id);
+
+  const estimatePrice = (vehicle: any) => {
+    const basePrice = vehicle.base_price;
+    const estimatedDistance = 10;
+    return Math.round(basePrice + (vehicle.price_per_km * estimatedDistance));
+  };
 
   const handleNext = () => {
     const vehicle = vehicles.find(v => v.id === selectedVehicle);
     if (!vehicle) return;
     
+    const estimatedPrice = estimatePrice(vehicle);
     updateBookingFlow({ 
       selectedVehicle: vehicle,
-      estimatedPrice: vehicle.price 
+      estimatedPrice 
     });
     navigate('/booking/confirmation');
   };
@@ -88,7 +97,7 @@ export default function VehicleSelect() {
                   
                   <div className="text-right flex items-center gap-3">
                     <div>
-                      <p className="font-bold text-lg">${vehicle.price}</p>
+                      <p className="font-bold text-lg">${estimatePrice(vehicle)}</p>
                       <p className="text-xs text-muted-foreground">Estimated</p>
                     </div>
                     
