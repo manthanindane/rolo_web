@@ -97,7 +97,7 @@ export default function VehicleSelect() {
                   
                   <div className="text-right flex items-center gap-3">
                     <div>
-                      <p className="font-bold text-lg">${estimatePrice(vehicle)}</p>
+                      <p className="font-bold text-lg">₹{estimatePrice(vehicle)}</p>
                       <p className="text-xs text-muted-foreground">Estimated</p>
                     </div>
                     
