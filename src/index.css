@@ -1,6 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+
+/* Custom utilities */
+.bg-gradient-radial {
+  background: radial-gradient(circle, var(--tw-gradient-stops));
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+
 
 /* Rolo Luxury Design System - Premium Black & White Theme */
 
