@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === 'development' &&
     componentTagger(),
-  ].filter(Boolean),
+  ].filter(Boolean),  
+  define:{
+    'process.env': {},
+    global: 'globalThis',
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -1,113 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { useRoloStore } from '@/store/useRoloStore';
+import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { ArrowLeft, Users, Clock, Star, ArrowRight, Shield, Wifi, Coffee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Vehicle {
-  id: number;
+  id: string;
   type: string;
   name: string;
-  category: string;
-  description: string;
-  image: string;
-  price: number;
-  eta: string;
-  seats: number;
-  rating: number;
-  features: string[];
+  description: string | null;
+  price_per_km: number;
+  base_price: number;
+  image_url: string | null;
+  eta?: string;
+  seats?: number;
+  rating?: number;
+  features?: string[];
 }
 
 export default function VehicleSelect(): JSX.Element {
   const navigate = useNavigate();
   const { bookingFlow, updateBookingFlow } = useRoloStore();
+  const { vehicles, refetch } = useSupabaseData();
   
-  const [selectedVehicle, setSelectedVehicle] = useState<number | null>(null);
+  const [selectedVehicle, setSelectedVehicle] = useState<string | null>(null);
 
-  // Luxury vehicle data
-  const luxuryVehicles: Vehicle[] = [
-    {
-      id: 1,
-      type: "Sedan",
-      name: "Mercedes C-Class Sedan",
-      category: "Luxury Ride",
-      description: "Premium comfort with executive style",
-      image: "/assets/mercedes-c-class.png",
-      price: 2500,
-      eta: "3 min",
-      seats: 4,
-      rating: 4.9,
-      features: ["Leather Seats", "Climate Control", "Premium Audio"]
-    },
-    {
-      id: 2,
-      type: "Sedan",
-      name: "BMW 3 Series Sedan",
-      category: "Executive",
-      description: "Dynamic luxury with sporty elegance",
-      image: "/assets/bmw-3-series.png",
-      price: 2800,
-      eta: "5 min",
-      seats: 4,
-      rating: 4.8,
-      features: ["Sport Mode", "Ambient Lighting", "Wireless Charging"]
-    },
-    {
-      id: 3,
-      type: "Sedan",
-      name: "Audi A4 Premium",
-      category: "Business Class",
-      description: "Sophisticated design meets performance",
-      image: "/assets/audi-a4.png",
-      price: 2600,
-      eta: "4 min",
-      seats: 4,
-      rating: 4.9,
-      features: ["Virtual Cockpit", "Bang & Olufsen", "Massage Seats"]
-    },
-    {
-      id: 4,
-      type: "Sedan",
-      name: "Mercedes E-Class",
-      category: "First Class",
-      description: "Ultimate luxury and comfort experience",
-      image: "assets/mercedes-e-class.jpg",
-      price: 3200,
-      eta: "6 min",
-      seats: 4,
-      rating: 5.0,
-      features: ["Executive Rear", "Air Suspension", "Burmester Audio"]
-    },
-    {
-      id: 5,
-      type: "SUV",
-      name: "BMW X5 SUV",
-      category: "Premium SUV",
-      description: "Spacious luxury with commanding presence",
-      image: "assets/bmw-x5.jpg",
-      price: 3500,
-      eta: "7 min",
-      seats: 6,
-      rating: 4.9,
-      features: ["Panoramic Roof", "360° Camera", "Harman Kardon"]
-    },
-    {
-      id: 6,
-      type: "SUV",
-      name: "Range Rover Evoque",
-      category: "Luxury SUV",
-      description: "British luxury with all-terrain capability",
-      image: "assets/range-rover.jpg",
-      price: 4000,
-      eta: "8 min",
-      seats: 5,
-      rating: 4.8,
-      features: ["Terrain Response", "Meridian Audio", "Head-Up Display"]
+  // Helper function to get features based on vehicle type
+  const getVehicleFeatures = (type: string): string[] => {
+    switch (type) {
+      case 'sedan':
+        return ["Leather Seats", "Climate Control", "Premium Audio"];
+      case 'suv':
+        return ["Panoramic Roof", "360° Camera", "Harman Kardon"];
+      case 'limousine':
+        return ["Executive Rear", "Air Suspension", "Burmester Audio"];
+      case 'luxury_sedan':
+        return ["Virtual Cockpit", "Bang & Olufsen", "Massage Seats"];
+      default:
+        return ["Premium Interior", "Professional Driver", "WiFi Available"];
     }
-  ];
+  };
 
-  const handleVehicleSelect = (vehicleId: number): void => {
+  // Fetch vehicles from database on component mount
+  useEffect(() => {
+    refetch.vehicles();
+  }, [refetch]);
+
+  // Transform database vehicles to include additional UI properties
+  const luxuryVehicles: Vehicle[] = vehicles.map(vehicle => ({
+    ...vehicle,
+    eta: "3-8 min", // Default ETA
+    seats: vehicle.type === 'suv' ? 6 : 4, // Default seats based on type
+    rating: 4.8, // Default rating
+    features: getVehicleFeatures(vehicle.type) // Get features based on type
+  }));
+
+  const handleVehicleSelect = (vehicleId: string): void => {
     setSelectedVehicle(vehicleId);
   };
 
@@ -115,9 +65,20 @@ export default function VehicleSelect(): JSX.Element {
     const vehicle = luxuryVehicles.find(v => v.id === selectedVehicle);
     if (!vehicle) return;
     
+    // Calculate estimated price based on base_price and a sample distance
+    const estimatedPrice = vehicle.base_price + (vehicle.price_per_km * 10); // Assuming 10km average trip
+    
     updateBookingFlow({ 
-      selectedVehicle: vehicle,
-      estimatedPrice: vehicle.price
+      selectedVehicle: {
+        id: vehicle.id,
+        type: vehicle.type,
+        name: vehicle.name,
+        price: estimatedPrice,
+        eta: vehicle.eta || "5 min",
+        image: vehicle.image_url || "/placeholder.svg",
+        description: vehicle.description || "Premium luxury vehicle"
+      },
+      estimatedPrice: estimatedPrice
     });
     navigate('/booking/confirmation');
   };
@@ -155,7 +116,7 @@ export default function VehicleSelect(): JSX.Element {
           {/* Vehicle Image */}
           <div className="relative w-full h-32 mb-4 flex items-center justify-center">
             <img
-              src={vehicle.image}
+              src={vehicle.image_url || "/placeholder.svg"}
               alt={vehicle.name}
               className="w-full h-full object-cover rounded-xl"
               style={{
@@ -177,10 +138,10 @@ export default function VehicleSelect(): JSX.Element {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-white">{vehicle.name}</h3>
-                <p className="text-[#00D1C1] text-sm font-medium">{vehicle.category}</p>
+                <p className="text-[#00D1C1] text-sm font-medium">{vehicle.type}</p>
               </div>
               <div className="text-right">
-                <div className="text-xl font-bold text-white">₹{vehicle.price}</div>
+                <div className="text-xl font-bold text-white">₹{vehicle.base_price + (vehicle.price_per_km * 10)}</div>
                 <div className="text-xs text-white/40">Estimated</div>
               </div>
             </div>
@@ -246,7 +207,7 @@ export default function VehicleSelect(): JSX.Element {
           {/* Vehicle Image */}
           <div className="relative w-40 h-28 mr-6 flex-shrink-0">
             <img
-              src={vehicle.image}
+              src={vehicle.image_url || "/placeholder.svg"}
               alt={vehicle.name}
               className="w-full h-full object-cover rounded-xl"
               style={{
@@ -266,7 +227,7 @@ export default function VehicleSelect(): JSX.Element {
               )}
             </div>
             
-            <p className="text-[#00D1C1] text-sm font-medium mb-1">{vehicle.category}</p>
+            <p className="text-[#00D1C1] text-sm font-medium mb-1">{vehicle.type}</p>
             <p className="text-white/60 text-sm mb-4">{vehicle.description}</p>
             
             {/* Features */}
@@ -295,7 +256,7 @@ export default function VehicleSelect(): JSX.Element {
                 ))}
               </div>
               <div className="text-right">
-                <div className="text-3xl font-bold text-white">₹{vehicle.price}</div>
+                <div className="text-3xl font-bold text-white">₹{vehicle.base_price + (vehicle.price_per_km * 10)}</div>
                 <div className="text-xs text-white/40">Estimated fare</div>
               </div>
             </div>

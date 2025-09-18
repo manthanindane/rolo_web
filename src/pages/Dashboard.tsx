@@ -1,20 +1,173 @@
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuxuryButton } from '@/components/ui/luxury-button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { useAuth } from '@/hooks/useAuth';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
-import { Search, MapPin, Clock, Star, Car, ArrowRight, Calendar, TrendingUp, Bell, Menu, Filter, User } from 'lucide-react';
+import { 
+  Search, 
+  MapPin, 
+  Clock, 
+  Star, 
+  Car, 
+  ArrowRight, 
+  Calendar, 
+  TrendingUp, 
+  Bell, 
+  Menu, 
+  Filter, 
+  User,
+  Navigation,
+  Maximize,
+  Minimize,
+  X
+} from 'lucide-react';
+
+// Ola Maps Web SDK Configuration
+const KRUTRIM_API_KEY = "G0eGxIsSerBkUv2JkB94c3A148zpxUaM9LaoPB9t";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { rides, profile, loading } = useSupabaseData();
   
-  const recentRides = rides.slice(0, 3);
+  // Map related state
+  const mapRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const [isMapLoaded, setIsMapLoaded] = useState(false);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [mapError, setMapError] = useState(null);
+  
+  // Memoized values to prevent unnecessary re-renders
+  const recentRides = useMemo(() => rides.slice(0, 3), [rides]);
   const currentTime = new Date().getHours();
-  const greeting = currentTime < 12 ? 'Good morning' : currentTime < 18 ? 'Good afternoon' : 'Good evening';
+  const greeting = useMemo(() => 
+    currentTime < 12 ? 'Good morning' : currentTime < 18 ? 'Good afternoon' : 'Good evening',
+    [currentTime]
+  );
+
+
+   // Add user location marker
+   const addUserLocationMarker = useCallback((mapInstance, location) => {
+    if (!mapInstance || !location) return;
+
+    try {
+      // Create a marker for user location
+      const marker = new window.OlaMaps.Marker({
+        color: '#00D1C1',
+        draggable: false,
+      })
+        .setLngLat([location.lng, location.lat])
+        .addTo(mapInstance);
+
+      // Add a popup to the marker
+      const popup = new window.OlaMaps.Popup({ offset: 25 })
+        .setHTML('<div style="color: #333; font-weight: bold;">Your Location</div>');
+      
+      marker.setPopup(popup);
+    } catch (error) {
+      console.error('Error adding marker:', error);
+    }
+  }, []);
+
+  // Initialize Ola Maps SDK
+  useEffect(() => {
+    const initializeMap = async () => {
+      try {
+        if (window.OlaMaps && mapRef.current && !mapInstanceRef.current) {
+          const olaMaps = new window.OlaMaps({
+            apiKey: KRUTRIM_API_KEY,
+          });
+  
+          const mapInstance = olaMaps.init({
+            style: 'default',
+            container: mapRef.current,
+            center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139],
+            zoom: userLocation ? 15 : 10,
+          });
+  
+          mapInstanceRef.current = mapInstance;
+  
+          mapInstance.on('load', () => {
+            setIsMapLoaded(true);
+            setMapError(null);
+            if (userLocation) addUserLocationMarker(mapInstance, userLocation);
+          });
+  
+          mapInstance.on('error', (error) => {
+            console.error('Map error:', error);
+            setMapError('Failed to load map');
+          });
+        }
+      } catch (error) {
+        console.error('Map initialization error:', error);
+        setMapError('Failed to initialize map');
+      }
+    };
+  
+    if (!window.OlaMaps) {
+      const script = document.createElement('script');
+      script.src = 'https://api.olamaps.io/tiles/v1/sdk/js';
+      script.async = true;
+      script.onload = () => {
+        console.log('Ola Maps SDK loaded successfully');
+        initializeMap();
+      };
+      script.onerror = () => {
+        console.error('Failed to load Ola Maps SDK');
+        setMapError('Failed to load map SDK');
+      };
+      document.head.appendChild(script);
+  
+      return () => {
+        if (script.parentNode) script.parentNode.removeChild(script);
+      };
+    } else {
+      initializeMap();
+    }
+  }, [userLocation, addUserLocationMarker]);
+
+  // Get user's current location
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.warn('Geolocation error:', error);
+          // Fallback to Delhi coordinates
+          setUserLocation({ lat: 28.6139, lng: 77.2090 });
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+      );
+    } else {
+      // Fallback to Delhi coordinates
+      setUserLocation({ lat: 28.6139, lng: 77.2090 });
+    }
+  }, []);
+
+ 
+
+  // Toggle map expansion
+  const toggleMapExpansion = useCallback(() => {
+    setIsMapExpanded(prev => !prev);
+  }, []);
+
+  // Close expanded map
+  const closeExpandedMap = useCallback(() => {
+    setIsMapExpanded(false);
+  }, []);
+
+  // Navigate to booking with location
+  const navigateToBooking = useCallback(() => {
+    navigate('/booking/location');
+  }, [navigate]);
 
   if (loading) {
     return (
@@ -38,6 +191,21 @@ export default function Dashboard() {
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-gradient-radial from-[#00D1C1]/8 via-[#1A1F36]/4 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/2 left-1/4 w-80 h-80 bg-gradient-radial from-[#1A1F36]/6 via-[#00D1C1]/3 to-transparent rounded-full blur-3xl"></div>
       </div>
+
+      {/* Expanded Map Modal */}
+      {isMapExpanded && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+          <div className="relative w-full h-full">
+            <button
+              onClick={closeExpandedMap}
+              className="absolute top-4 right-4 z-10 p-2 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <div className="w-full h-full" ref={mapRef}></div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Layout */}
       <div className="lg:hidden">
@@ -82,6 +250,64 @@ export default function Dashboard() {
         </div>
 
         <div className="relative z-10 px-6 space-y-8">
+          {/* Map Section */}
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36]/30 to-[#00D1C1]/30 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-500"></div>
+            
+            <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-white/10">
+                <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-[#00D1C1]" />
+                  Live Map
+                </h3>
+                <button
+                  onClick={toggleMapExpansion}
+                  className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <Maximize className="w-4 h-4" />
+                </button>
+              </div>
+              
+              <div className="relative h-64 bg-gray-900">
+                {!isMapExpanded && (
+                  <div ref={mapRef} className="w-full h-full"></div>
+                )}
+                
+                {mapError && (
+                  <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
+                    <div className="text-center">
+                      <MapPin className="w-8 h-8 mx-auto mb-2 text-white/40" />
+                      <p>{mapError}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {!isMapLoaded && !mapError && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-8 h-8 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin"></div>
+                  </div>
+                )}
+                
+                {/* Map Controls */}
+                <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                  <button
+                    className="p-2 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
+                    onClick={() => {
+                      if (userLocation && mapInstanceRef.current) {
+                        mapInstanceRef.current.flyTo({
+                          center: [userLocation.lng, userLocation.lat],
+                          zoom: 15
+                        });
+                      }
+                    }}
+                  >
+                    <Navigation className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Search Section */}
           <div className="relative group">
             <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36]/30 to-[#00D1C1]/30 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-500"></div>
@@ -94,7 +320,7 @@ export default function Dashboard() {
                 <input
                   placeholder="Search destination..."
                   className="w-full h-14 pl-12 pr-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-white text-lg placeholder-white/40 focus:border-[#00D1C1]/50 focus:ring-2 focus:ring-[#00D1C1]/20 focus:outline-none transition-all duration-300"
-                  onClick={() => navigate('/booking/location')}
+                  onClick={navigateToBooking}
                   readOnly
                 />
               </div>
@@ -102,7 +328,7 @@ export default function Dashboard() {
               <div className="relative group/btn">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-xl blur opacity-40 group-hover/btn:opacity-60 transition duration-300"></div>
                 <button
-                  onClick={() => navigate('/booking/location')}
+                  onClick={navigateToBooking}
                   className="relative w-full h-12 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white font-semibold rounded-xl hover:shadow-2xl hover:shadow-[#00D1C1]/20 transition-all duration-500 group-hover/btn:scale-[1.01] flex items-center justify-center gap-2"
                 >
                   Book a Ride
@@ -165,7 +391,7 @@ export default function Dashboard() {
                       
                       <div className="text-right space-y-1">
                         <p className="font-semibold text-white">${ride.final_price || ride.estimated_price}</p>
-                        <p className="text-xs text-white/50">{ride.vehicle.name}</p>
+                        <p className="text-xs text-white/50">{ride.vehicle?.name || 'Premium'}</p>
                       </div>
                     </div>
                   </div>
@@ -181,7 +407,7 @@ export default function Dashboard() {
                   Experience luxury transportation at your fingertips
                 </p>
                 <button
-                  onClick={() => navigate('/booking/location')}
+                  onClick={navigateToBooking}
                   className="text-[#00D1C1] hover:text-[#00D1C1]/80 font-medium text-sm transition-colors"
                 >
                   Book your first ride →
@@ -282,6 +508,72 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Map Section Desktop */}
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36]/30 to-[#00D1C1]/30 rounded-3xl blur opacity-20 group-hover:opacity-30 transition duration-500"></div>
+                
+                <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden">
+                  <div className="flex items-center justify-between p-6 border-b border-white/10">
+                    <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                      <MapPin className="w-6 h-6 text-[#00D1C1]" />
+                      Live Map View
+                    </h3>
+                    <button
+                      onClick={toggleMapExpansion}
+                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                    >
+                      <Maximize className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  <div className="relative h-96 bg-gray-900">
+                    {!isMapExpanded && (
+                      <div ref={mapRef} className="w-full h-full"></div>
+                    )}
+                    
+                    {mapError && (
+                      <div className="absolute inset-0 flex items-center justify-center text-white/60">
+                        <div className="text-center">
+                          <MapPin className="w-12 h-12 mx-auto mb-4 text-white/40" />
+                          <p className="text-lg">{mapError}</p>
+                          <p className="text-sm text-white/40 mt-2">Check your internet connection and API key</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!isMapLoaded && !mapError && (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-12 h-12 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin mx-auto mb-4"></div>
+                          <p className="text-white/60">Loading map...</p>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Map Controls */}
+                    <div className="absolute bottom-6 right-6 flex flex-col gap-3">
+                      <button
+                        className="p-3 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
+                        onClick={() => {
+                          if (userLocation && mapInstanceRef.current) {
+                            try {
+                              mapInstanceRef.current.flyTo({
+                                center: [userLocation.lng, userLocation.lat],
+                                zoom: 15
+                              });
+                            } catch (error) {
+                              console.warn('Error flying to location:', error);
+                            }
+                          }
+                        }}
+                      >
+                        <Navigation className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Recent Rides Desktop */}
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -361,7 +653,7 @@ export default function Dashboard() {
                       Experience luxury transportation with professional drivers and premium vehicles at your fingertips.
                     </p>
                     <button
-                      onClick={() => navigate('/booking/location')}
+                      onClick={navigateToBooking}
                       className="bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white px-8 py-3 rounded-xl font-semibold hover:shadow-2xl hover:shadow-[#00D1C1]/20 transition-all duration-500 flex items-center gap-2 mx-auto"
                     >
                       Book your first ride
@@ -387,7 +679,7 @@ export default function Dashboard() {
                       <input
                         placeholder="Search destination..."
                         className="w-full h-12 pl-12 pr-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl text-white placeholder-white/40 focus:border-[#00D1C1]/50 focus:ring-2 focus:ring-[#00D1C1]/20 focus:outline-none transition-all duration-300"
-                        onClick={() => navigate('/booking/location')}
+                        onClick={navigateToBooking}
                         readOnly
                       />
                     </div>
@@ -396,7 +688,7 @@ export default function Dashboard() {
                   <div className="relative group/btn">
                     <div className="absolute -inset-0.5 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-xl blur opacity-40 group-hover/btn:opacity-60 transition duration-300"></div>
                     <button
-                      onClick={() => navigate('/booking/location')}
+                      onClick={navigateToBooking}
                       className="relative w-full h-12 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white font-semibold rounded-xl hover:shadow-2xl hover:shadow-[#00D1C1]/20 transition-all duration-500 group-hover/btn:scale-[1.02] flex items-center justify-center gap-2"
                     >
                       Book a Ride
@@ -434,6 +726,27 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* Live Location Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#00D1C1]/20 to-[#1A1F36]/30 border border-white/10 rounded-2xl p-6">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-[#00D1C1]/10 rounded-full -translate-y-10 translate-x-10"></div>
+                <div className="relative">
+                  <div className="w-12 h-12 bg-gradient-to-r from-[#00D1C1] to-[#1A1F36] rounded-xl flex items-center justify-center mb-4">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Live Location</h3>
+                  <p className="text-white/60 text-sm mb-4">
+                    {userLocation 
+                      ? `Lat: ${userLocation.lat.toFixed(4)}, Lng: ${userLocation.lng.toFixed(4)}`
+                      : "Getting your location..."
+                    }
+                  </p>
+                  <div className="flex items-center gap-2 text-sm text-[#00D1C1]">
+                    <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
+                    <span className="font-medium">Location Active</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Achievement Badge */}
               <div className="relative overflow-hidden bg-gradient-to-br from-[#1A1F36]/30 to-[#00D1C1]/20 border border-white/10 rounded-2xl p-6">
                 <div className="absolute top-0 right-0 w-20 h-20 bg-[#00D1C1]/10 rounded-full -translate-y-10 translate-x-10"></div>
@@ -443,7 +756,7 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-lg font-semibold text-white mb-2">Premium Member</h3>
                   <p className="text-white/60 text-sm mb-4">
-                    You've completed 25+ rides! Enjoy exclusive benefits and priority booking.
+                    You've completed {rides.length}+ rides! Enjoy exclusive benefits and priority booking.
                   </p>
                   <div className="flex items-center gap-2 text-sm text-[#00D1C1]">
                     <span className="font-medium">View Benefits</span>

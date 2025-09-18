@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LuxuryButton } from '@/components/ui/luxury-button';
-import { useRoloStore } from '@/store/useRoloStore';
+import { useRoloStore, Vehicle, Ride } from '@/store/useRoloStore';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { useToast } from '@/hooks/use-toast';
 import { 
@@ -20,29 +19,47 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-interface RideData {
-  pickup_location: string;
-  dropoff_location: string;
-  vehicle_id: string; // Changed from number to string to match Supabase UUID
-  estimated_price: number;
+// Razorpay interface
+interface RazorpayOptions {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  image?: string;
+  order_id?: string;
+  handler: (response: RazorpayResponse) => void;
+  prefill: {
+    name?: string;
+    email?: string;
+    contact?: string;
+  };
+  notes?: Record<string, any>;
+  theme: {
+    color: string;
+  };
+  modal: {
+    ondismiss: () => void;
+  };
 }
 
-interface SelectedVehicle {
-  id: string; // Changed from number to string
-  name: string;
-  category?: string;
-  description?: string;
-  eta: string;
-  seats: number;
-  rating: number;
-  features?: string[];
-  price: number;
+interface RazorpayResponse {
+  razorpay_payment_id: string;
+  razorpay_order_id?: string;
+  razorpay_signature?: string;
 }
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 
 interface BookingFlow {
   pickup: string;
   dropoff: string;
-  selectedVehicle: SelectedVehicle | null;
+  selectedVehicle: Vehicle | null;
   estimatedPrice: number;
 }
 
@@ -52,6 +69,189 @@ export default function RideConfirmation(): JSX.Element {
   const { createRide } = useSupabaseData();
   const { toast } = useToast();
   const [isBooking, setIsBooking] = useState<boolean>(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState<boolean>(false);
+
+  // Load Razorpay script
+  useEffect(() => {
+    const loadRazorpayScript = () => {
+      return new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = () => {
+          setRazorpayLoaded(true);
+          resolve(true);
+        };
+        script.onerror = () => {
+          console.error('Failed to load Razorpay script');
+          resolve(false);
+        };
+        document.body.appendChild(script);
+      });
+    };
+
+    if (!window.Razorpay) {
+      loadRazorpayScript();
+    } else {
+      setRazorpayLoaded(true);
+    }
+  }, []);
+
+  // Generate a proper UUID v4
+  const generateUUID = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  const handlePaymentSuccess = async (paymentResponse: RazorpayResponse): Promise<void> => {
+    console.log('Payment successful:', paymentResponse);
+    
+    if (!bookingFlow?.selectedVehicle || !bookingFlow?.estimatedPrice) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Missing booking details",
+      });
+      return;
+    }
+
+    try {
+      // Ensure we have a valid UUID for vehicle_id
+      let vehicleId = bookingFlow.selectedVehicle.id;
+      
+      // If the ID is not a valid UUID format, generate one
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(vehicleId)) {
+        vehicleId = generateUUID();
+        console.warn('Generated new UUID for vehicle_id:', vehicleId);
+      }
+
+      // Log payment information (not stored in database)
+      console.log('Payment details:', {
+        payment_id: paymentResponse.razorpay_payment_id,
+        payment_status: 'completed'
+      });
+
+      const rideData = {
+        pickup_location: bookingFlow.pickup,
+        dropoff_location: bookingFlow.dropoff,
+        vehicle_id: vehicleId,
+        estimated_price: bookingFlow.estimatedPrice
+      };
+
+      const { data, error } = await createRide(rideData);
+
+      if (error) {
+        console.error('Ride creation error:', error);
+        toast({
+          variant: "destructive",
+          title: "Booking Failed",
+          description: typeof error === 'string' ? error : error.message || 'Failed to create ride after payment',
+        });
+        return;
+      }
+
+      if (data) {
+        // Convert Supabase ride data to store Ride format
+        const storeRide: Ride = {
+          id: data.id,
+          pickup: data.pickup_location,
+          dropoff: data.dropoff_location,
+          vehicle: {
+            id: data.vehicle_id,
+            type: 'luxury_sedan', // Default type since we don't have it in the response
+            name: selectedVehicle.name,
+            price: data.estimated_price,
+            eta: selectedVehicle.eta,
+            image: selectedVehicle.image,
+            description: selectedVehicle.description
+          },
+          price: data.estimated_price,
+          status: 'upcoming',
+          date: new Date().toISOString().split('T')[0]
+        };
+        
+        setCurrentBooking(storeRide);
+        console.log('Booking created:', storeRide);
+        toast({
+          title: "Payment Successful!",
+          description: "Your ride has been booked. Finding your driver...",
+        });
+        navigate('/booking/searching');
+      }
+    } catch (err) {
+      console.error('Post-payment booking error:', err);
+      toast({
+        variant: "destructive",
+        title: "Booking Failed",
+        description: "Payment successful but ride booking failed. Please contact support.",
+      });
+    } finally {
+      setIsBooking(false);
+    }
+  };
+
+  const handlePaymentFailure = (): void => {
+    console.log('Payment cancelled or failed');
+    setIsBooking(false);
+    toast({
+      variant: "destructive",
+      title: "Payment Cancelled",
+      description: "Your payment was not completed. Please try again.",
+    });
+  };
+
+  const initializeRazorpay = (): void => {
+    if (!razorpayLoaded || !window.Razorpay) {
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: "Payment gateway is not loaded. Please refresh and try again.",
+      });
+      return;
+    }
+
+    if (!bookingFlow?.selectedVehicle || !bookingFlow?.estimatedPrice) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Please select a vehicle first",
+      });
+      return;
+    }
+
+    const options: RazorpayOptions = {
+      key: 'rzp_live_RHW97oiHDY3dQq', // Your Razorpay key
+      amount: bookingFlow.estimatedPrice * 100, // Amount in paise (multiply by 100)
+      currency: 'INR',
+      name: 'ROLO Rides',
+      description: `Ride from ${bookingFlow.pickup} to ${bookingFlow.dropoff}`,
+      image: '/logo.png', // Add your app logo URL
+      handler: handlePaymentSuccess,
+      prefill: {
+        name: 'Rolo Pvt.Ltd', // You can get this from user context/store
+        email: 'team@rolorides.com', // You can get this from user context/store
+        contact: '8329472792' // You can get this from user context/store
+      },
+      notes: {
+        pickup: bookingFlow.pickup,
+        dropoff: bookingFlow.dropoff,
+        vehicle: bookingFlow.selectedVehicle.name,
+        vehicle_id: bookingFlow.selectedVehicle.id
+      },
+      theme: {
+        color: '#00D1C1'
+      },
+      modal: {
+        ondismiss: handlePaymentFailure
+      }
+    };
+
+    const razorpayInstance = new window.Razorpay(options);
+    razorpayInstance.open();
+  };
 
   const handleConfirmBooking = async (): Promise<void> => {
     if (!bookingFlow?.selectedVehicle || !bookingFlow?.estimatedPrice) {
@@ -72,45 +272,21 @@ export default function RideConfirmation(): JSX.Element {
       return;
     }
 
-    setIsBooking(true);
-
-    try {
-      const rideData: RideData = {
-        pickup_location: bookingFlow.pickup,
-        dropoff_location: bookingFlow.dropoff,
-        vehicle_id: bookingFlow.selectedVehicle.id, // Now correctly passing string ID
-        estimated_price: bookingFlow.estimatedPrice
-      };
-
-      const { data, error } = await createRide(rideData);
-
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Booking Failed",
-          description: typeof error === 'string' ? error : error.message || 'Unknown error occurred',
-        });
-        return;
-      }
-
-      if (data) {
-        setCurrentBooking(data);
-        toast({
-          title: "Ride Booked!",
-          description: "Finding your driver...",
-        });
-        navigate('/booking/searching');
-      }
-    } catch (err) {
-      console.error('Booking error:', err);
+    if (!razorpayLoaded) {
       toast({
         variant: "destructive",
-        title: "Booking Failed",
-        description: "Something went wrong. Please try again.",
+        title: "Payment Error",
+        description: "Payment gateway is loading. Please wait a moment and try again.",
       });
-    } finally {
-      setIsBooking(false);
+      return;
     }
+
+    setIsBooking(true);
+    
+    // Add a small delay to show the loading state
+    setTimeout(() => {
+      initializeRazorpay();
+    }, 500);
   };
 
   const handleBack = (): void => {
@@ -118,8 +294,10 @@ export default function RideConfirmation(): JSX.Element {
   };
 
   const handleEditPayment = (): void => {
-    // Navigate to payment method selection
-    console.log('Edit payment method');
+    toast({
+      title: "Payment Method",
+      description: "Currently using Razorpay for secure payments",
+    });
   };
 
   // Type guard and early return
@@ -133,7 +311,7 @@ export default function RideConfirmation(): JSX.Element {
 
   // Calculate estimated arrival time
   const estimatedTime = new Date();
-  const etaMinutes = parseInt(selectedVehicle.eta?.replace(/\D/g, '') || '10'); // Extract numbers from eta string
+  const etaMinutes = parseInt(selectedVehicle.eta?.replace(/\D/g, '') || '10');
   estimatedTime.setMinutes(estimatedTime.getMinutes() + etaMinutes);
 
   // Calculate fare breakdown
@@ -214,7 +392,7 @@ export default function RideConfirmation(): JSX.Element {
                 
                 <div className="flex-1">
                   <h3 className="font-bold text-white text-lg">{selectedVehicle.name}</h3>
-                  <p className="text-[#00D1C1] text-sm font-medium">{selectedVehicle.category || 'Luxury'}</p>
+                  <p className="text-[#00D1C1] text-sm font-medium">{selectedVehicle.type || 'Luxury'}</p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
@@ -222,7 +400,7 @@ export default function RideConfirmation(): JSX.Element {
                     </div>
                     <div className="flex items-center gap-1">
                       <Star className="h-3 w-3 text-yellow-500" />
-                      <span>{selectedVehicle.rating}</span>
+                      <span>4.8</span>
                     </div>
                   </div>
                 </div>
@@ -250,8 +428,8 @@ export default function RideConfirmation(): JSX.Element {
                     <CreditCard className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <p className="font-medium text-white">Payment Method</p>
-                    <p className="text-sm text-white/60">•••• •••• •••• 4242</p>
+                    <p className="font-medium text-white">Razorpay</p>
+                    <p className="text-sm text-white/60">Secure Payment Gateway</p>
                   </div>
                 </div>
                 
@@ -260,7 +438,7 @@ export default function RideConfirmation(): JSX.Element {
                   className="text-[#00D1C1] text-sm font-medium hover:text-[#00D1C1]/80 transition-colors flex items-center gap-1"
                 >
                   <Edit3 className="h-4 w-4" />
-                  Change
+                  Info
                 </button>
               </div>
             </div>
@@ -275,7 +453,7 @@ export default function RideConfirmation(): JSX.Element {
             <div className="w-px h-4 bg-white/10"></div>
             <div className="flex items-center gap-2">
               <CheckCircle className="h-4 w-4 text-[#00D1C1]" />
-              <span className="text-xs">Insured</span>
+              <span className="text-xs">Secure Payment</span>
             </div>
           </div>
         </div>
@@ -358,7 +536,7 @@ export default function RideConfirmation(): JSX.Element {
                       
                       <div className="flex-1">
                         <h3 className="font-bold text-white text-xl">{selectedVehicle.name}</h3>
-                        <p className="text-[#00D1C1] font-medium mb-2">{selectedVehicle.category || 'Luxury'}</p>
+                        <p className="text-[#00D1C1] font-medium mb-2">{selectedVehicle.type || 'Luxury'}</p>
                         <p className="text-white/70 mb-3">{selectedVehicle.description || 'Premium luxury vehicle'}</p>
                         
                         <div className="flex items-center gap-6 text-sm text-white/60">
@@ -368,29 +546,31 @@ export default function RideConfirmation(): JSX.Element {
                           </div>
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
-                            <span>{selectedVehicle.seats} passengers</span>
+                            <span>4 passengers</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Star className="h-4 w-4 text-yellow-500" />
-                            <span>{selectedVehicle.rating} rating</span>
+                            <span>4.8 rating</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Features */}
-                    {selectedVehicle.features && selectedVehicle.features.length > 0 && (
-                      <div className="mt-6 pt-6 border-t border-white/10">
-                        <p className="text-white/60 text-sm mb-3">Included features:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedVehicle.features.map((feature: string, idx: number) => (
-                            <span key={idx} className="text-xs px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
-                              {feature}
-                            </span>
-                          ))}
-                        </div>
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                      <p className="text-white/60 text-sm mb-3">Included features:</p>
+                      <div className="flex flex-wrap gap-2">
+                        <span className="text-xs px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
+                          Premium Interior
+                        </span>
+                        <span className="text-xs px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
+                          Professional Driver
+                        </span>
+                        <span className="text-xs px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
+                          WiFi Available
+                        </span>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -438,18 +618,15 @@ export default function RideConfirmation(): JSX.Element {
                           <CreditCard className="h-5 w-5 text-white" />
                         </div>
                         <div>
-                          <p className="font-medium text-white">Credit Card</p>
-                          <p className="text-sm text-white/60">•••• •••• •••• 4242</p>
+                          <p className="font-medium text-white">Razorpay</p>
+                          <p className="text-sm text-white/60">Secure Payment Gateway</p>
                         </div>
                       </div>
                       
-                      <button
-                        onClick={handleEditPayment}
-                        className="text-[#00D1C1] font-medium hover:text-[#00D1C1]/80 transition-colors flex items-center gap-2"
-                      >
-                        <Edit3 className="h-4 w-4" />
-                        Change
-                      </button>
+                      <div className="flex items-center gap-2 text-xs text-white/40">
+                        <Shield className="h-3 w-3" />
+                        <span>256-bit SSL</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -488,10 +665,10 @@ export default function RideConfirmation(): JSX.Element {
               <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
               <button
                 onClick={handleConfirmBooking}
-                disabled={isBooking}
+                disabled={isBooking || !razorpayLoaded}
                 className={cn(
                   "relative w-full py-4 px-6 rounded-2xl font-bold text-lg transition-all duration-300 flex items-center justify-center gap-3",
-                  isBooking
+                  isBooking || !razorpayLoaded
                     ? "bg-white/5 text-white/40 cursor-not-allowed"
                     : "bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white hover:shadow-2xl hover:shadow-[#00D1C1]/20 hover:scale-[1.02]"
                 )}
@@ -499,21 +676,33 @@ export default function RideConfirmation(): JSX.Element {
                 {isBooking ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></div>
-                    <span>Booking your ride...</span>
+                    <span>Opening Payment Gateway...</span>
+                  </>
+                ) : !razorpayLoaded ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white/20 border-t-white/60 rounded-full animate-spin"></div>
+                    <span>Loading Payment...</span>
                   </>
                 ) : (
                   <>
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Confirm Booking - ₹{estimatedPrice}</span>
+                    <CreditCard className="w-5 h-5" />
+                    <span>Pay ₹{estimatedPrice} - Confirm Booking</span>
                   </>
                 )}
               </button>
             </div>
             
-            <p className="text-xs text-center text-white/40 mt-4">
-              By confirming, you agree to our{' '}
-              <span className="text-[#00D1C1] hover:underline cursor-pointer">terms and conditions</span>
-            </p>
+            <div className="text-center mt-4 space-y-2">
+              <p className="text-xs text-white/40">
+                Secured by{' '}
+                <span className="text-[#00D1C1] font-medium">Razorpay</span>
+                {' '}• 256-bit SSL Encryption
+              </p>
+              <p className="text-xs text-white/30">
+                By confirming, you agree to our{' '}
+                <span className="text-[#00D1C1] hover:underline cursor-pointer">terms and conditions</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
