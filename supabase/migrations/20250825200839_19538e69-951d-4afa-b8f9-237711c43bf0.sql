@@ -118,20 +118,17 @@ ON public.rides
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
--- Insert sample vehicles
+-- Insert sample vehicles with correct images and reduced prices for testing
 INSERT INTO public.vehicles (type, name, description, price_per_km, base_price, image_url) VALUES
-('sedan', 'Luxury Sedan', 'Premium comfort for up to 4 passengers', 2.50, 5.00, '/placeholder.svg'),
-('suv', 'Executive SUV', 'Spacious luxury for up to 6 passengers', 3.50, 8.00, '/placeholder.svg'),
-('limousine', 'Stretch Limousine', 'Ultimate luxury experience for special occasions', 7.50, 15.00, '/placeholder.svg'),
-('luxury_sedan', 'Premium Mercedes', 'High-end Mercedes-Benz experience', 4.00, 10.00, '/placeholder.svg');
+('sedan', 'Audi A4', 'Premium comfort and performance for up to 4 passengers', 0.0025, 0.005, '/assets/audi-a4.png'),
+('suv', 'BMW 3 Series', 'Luxury sedan with advanced technology and comfort', 0.0035, 0.008, '/assets/bmw-3-series.png'),
+('luxury_sedan', 'Mercedes C-Class', 'Executive luxury with premium amenities', 0.004, 0.01, '/assets/mercedes-c-class.png');
 
--- Insert sample drivers
+-- Insert sample drivers matching the new vehicles
 INSERT INTO public.drivers (name, phone, car_model, plate_number, rating, photo_url) VALUES
-('James Wilson', '+1-555-0101', 'Mercedes-Benz S-Class', 'LUX-001', 4.9, '/placeholder.svg'),
-('Sarah Johnson', '+1-555-0102', 'BMW 7 Series', 'LUX-002', 4.8, '/placeholder.svg'),
-('Michael Chen', '+1-555-0103', 'Audi A8', 'LUX-003', 4.9, '/placeholder.svg'),
-('Emma Rodriguez', '+1-555-0104', 'Lexus LS', 'LUX-004', 5.0, '/placeholder.svg'),
-('David Thompson', '+1-555-0105', 'Cadillac Escalade', 'LUX-005', 4.7, '/placeholder.svg');
+('James Wilson', '+1-555-0101', 'Mercedes C-Class', 'LUX-001', 4.9, '/placeholder.svg'),
+('Sarah Johnson', '+1-555-0102', 'BMW 3 Series', 'LUX-002', 4.8, '/placeholder.svg'),
+('Michael Chen', '+1-555-0103', 'Audi A4', 'LUX-003', 4.9, '/placeholder.svg');
 
 -- Create function to update timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()

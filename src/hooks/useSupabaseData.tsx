@@ -52,6 +52,47 @@ export function useSupabaseData() {
 
   // Fetch vehicles
   const fetchVehicles = async () => {
+    // Temporary mock data with updated vehicles and reduced prices for testing
+    const mockVehicles = [
+      {
+        id: '1',
+        type: 'sedan',
+        name: 'Audi A4',
+        description: 'Premium comfort and performance for up to 4 passengers',
+        price_per_km: 0.0025,
+        base_price: 0.005,
+        image_url: '/assets/audi-a4.png',
+        is_available: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: '2',
+        type: 'suv',
+        name: 'BMW 3 Series',
+        description: 'Luxury sedan with advanced technology and comfort',
+        price_per_km: 0.0035,
+        base_price: 0.008,
+        image_url: '/assets/bmw-3-series.png',
+        is_available: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: '3',
+        type: 'luxury_sedan',
+        name: 'Mercedes C-Class',
+        description: 'Executive luxury with premium amenities',
+        price_per_km: 0.004,
+        base_price: 0.01,
+        image_url: '/assets/mercedes-c-class.png',
+        is_available: true,
+        created_at: new Date().toISOString()
+      }
+    ];
+    
+    setVehicles(mockVehicles);
+    
+    // Uncomment below to use real Supabase data instead of mock data
+    /*
     const { data, error } = await supabase
       .from('vehicles')
       .select('*')
@@ -60,10 +101,52 @@ export function useSupabaseData() {
     if (!error && data) {
       setVehicles(data);
     }
+    */
   };
 
   // Fetch drivers
   const fetchDrivers = async () => {
+    // Temporary mock data with updated drivers matching the new vehicles
+    const mockDrivers = [
+      {
+        id: '1',
+        name: 'James Wilson',
+        phone: '+1-555-0101',
+        car_model: 'Mercedes C-Class',
+        plate_number: 'LUX-001',
+        rating: 4.9,
+        photo_url: '/placeholder.svg',
+        is_available: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: '2',
+        name: 'Sarah Johnson',
+        phone: '+1-555-0102',
+        car_model: 'BMW 3 Series',
+        plate_number: 'LUX-002',
+        rating: 4.8,
+        photo_url: '/placeholder.svg',
+        is_available: true,
+        created_at: new Date().toISOString()
+      },
+      {
+        id: '3',
+        name: 'Michael Chen',
+        phone: '+1-555-0103',
+        car_model: 'Audi A4',
+        plate_number: 'LUX-003',
+        rating: 4.9,
+        photo_url: '/placeholder.svg',
+        is_available: true,
+        created_at: new Date().toISOString()
+      }
+    ];
+    
+    setDrivers(mockDrivers);
+    
+    // Uncomment below to use real Supabase data instead of mock data
+    /*
     const { data, error } = await supabase
       .from('drivers')
       .select('*')
@@ -72,6 +155,7 @@ export function useSupabaseData() {
     if (!error && data) {
       setDrivers(data);
     }
+    */
   };
 
   // Fetch user rides
