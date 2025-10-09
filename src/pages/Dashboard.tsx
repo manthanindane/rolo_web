@@ -24,7 +24,7 @@ import {
   X
 } from 'lucide-react';
 
-// Ola Maps Web SDK Configuration
+// Ola Maps Configuration
 const KRUTRIM_API_KEY = "G0eGxIsSerBkUv2JkB94c3A148zpxUaM9LaoPB9t";
 
 export default function Dashboard() {
@@ -35,10 +35,12 @@ export default function Dashboard() {
   // Map related state
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const mapContainerRef = useRef(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
   const [mapError, setMapError] = useState(null);
+  const [sdkLoaded, setSdkLoaded] = useState(false);
   
   // Memoized values to prevent unnecessary re-renders
   const recentRides = useMemo(() => rides.slice(0, 3), [rides]);
@@ -48,14 +50,13 @@ export default function Dashboard() {
     [currentTime]
   );
 
-
-   // Add user location marker
-   const addUserLocationMarker = useCallback((mapInstance, location) => {
+  // Add user location marker
+  const addUserLocationMarker = useCallback((mapInstance, location) => {
     if (!mapInstance || !location) return;
 
     try {
-      // Create a marker for user location
-      const marker = new window.OlaMaps.Marker({
+      // Create a marker for user location using the correct Ola Maps syntax
+      const marker = new window.olaMaps.Marker({
         color: '#00D1C1',
         draggable: false,
       })
@@ -63,8 +64,8 @@ export default function Dashboard() {
         .addTo(mapInstance);
 
       // Add a popup to the marker
-      const popup = new window.OlaMaps.Popup({ offset: 25 })
-        .setHTML('<div style="color: #333; font-weight: bold;">Your Location</div>');
+      const popup = new window.olaMaps.Popup({ offset: 25 })
+        .setHTML('<div style="color: #333; font-weight: bold; padding: 8px;">📍 Your Location</div>');
       
       marker.setPopup(popup);
     } catch (error) {
@@ -74,85 +75,146 @@ export default function Dashboard() {
 
   // Initialize Ola Maps SDK
   useEffect(() => {
-    const initializeMap = async () => {
-      try {
-        if (window.OlaMaps && mapRef.current && !mapInstanceRef.current) {
-          const olaMaps = new window.OlaMaps({
-            apiKey: KRUTRIM_API_KEY,
-          });
-  
-          const mapInstance = olaMaps.init({
-            style: 'default',
-            container: mapRef.current,
-            center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139],
-            zoom: userLocation ? 15 : 10,
-          });
-  
-          mapInstanceRef.current = mapInstance;
-  
-          mapInstance.on('load', () => {
-            setIsMapLoaded(true);
-            setMapError(null);
-            if (userLocation) addUserLocationMarker(mapInstance, userLocation);
-          });
-  
-          mapInstance.on('error', (error) => {
-            console.error('Map error:', error);
-            setMapError('Failed to load map');
-          });
-        }
-      } catch (error) {
-        console.error('Map initialization error:', error);
-        setMapError('Failed to initialize map');
+    const loadOlaMapsSdk = () => {
+      // Check if SDK is already loaded
+      if (window.OlaMaps) {
+        setSdkLoaded(true);
+        return;
       }
-    };
-  
-    if (!window.OlaMaps) {
+
+      // Create and load the script
       const script = document.createElement('script');
       script.src = 'https://api.olamaps.io/tiles/v1/sdk/js';
       script.async = true;
+      
       script.onload = () => {
         console.log('Ola Maps SDK loaded successfully');
-        initializeMap();
+        setSdkLoaded(true);
       };
-      script.onerror = () => {
-        console.error('Failed to load Ola Maps SDK');
-        setMapError('Failed to load map SDK');
+      
+      script.onerror = (error) => {
+        console.error('Failed to load Ola Maps SDK:', error);
+        setMapError('Failed to load map SDK. Please check your internet connection.');
+        setSdkLoaded(false);
       };
+      
       document.head.appendChild(script);
-  
+
+      // Cleanup function
       return () => {
-        if (script.parentNode) script.parentNode.removeChild(script);
+        if (script.parentNode) {
+          script.parentNode.removeChild(script);
+        }
       };
-    } else {
-      initializeMap();
-    }
-  }, [userLocation, addUserLocationMarker]);
+    };
+
+    const cleanup = loadOlaMapsSdk();
+    return cleanup;
+  }, []);
+
+  // Initialize the map once SDK is loaded
+  useEffect(() => {
+    const initializeMap = async () => {
+      if (!sdkLoaded || !window.OlaMaps || !mapContainerRef.current || mapInstanceRef.current) {
+        return;
+      }
+
+      try {
+        console.log('Initializing Ola Maps...');
+        
+        // Initialize Ola Maps
+        const olaMaps = new window.OlaMaps({
+          apiKey: KRUTRIM_API_KEY,
+        });
+
+        const mapInstance = olaMaps.init({
+          style: 'default',
+          container: mapContainerRef.current,
+          center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139], // Default to Delhi
+          zoom: userLocation ? 15 : 10,
+        });
+
+        mapInstanceRef.current = mapInstance;
+
+        // Add event listeners
+        mapInstance.on('load', () => {
+          console.log('Map loaded successfully');
+          setIsMapLoaded(true);
+          setMapError(null);
+          
+          // Add user location marker if available
+          if (userLocation) {
+            addUserLocationMarker(mapInstance, userLocation);
+          }
+        });
+
+        mapInstance.on('error', (error) => {
+          console.error('Map error:', error);
+          setMapError('Failed to load map. Please check your API key and internet connection.');
+        });
+
+      } catch (error) {
+        console.error('Map initialization error:', error);
+        setMapError(`Map initialization failed: ${error.message}`);
+      }
+    };
+
+    initializeMap();
+  }, [sdkLoaded, userLocation, addUserLocationMarker]);
 
   // Get user's current location
   useEffect(() => {
-    if (navigator.geolocation) {
+    const getUserLocation = () => {
+      if (!navigator.geolocation) {
+        console.warn('Geolocation is not supported by this browser');
+        // Fallback to Delhi coordinates
+        setUserLocation({ lat: 28.6139, lng: 77.2090 });
+        return;
+      }
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setUserLocation({
+          const location = {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
-          });
+          };
+          console.log('User location obtained:', location);
+          setUserLocation(location);
         },
         (error) => {
-          console.warn('Geolocation error:', error);
+          console.warn('Geolocation error:', error.message);
           // Fallback to Delhi coordinates
           setUserLocation({ lat: 28.6139, lng: 77.2090 });
         },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
+        }
       );
-    } else {
-      // Fallback to Delhi coordinates
-      setUserLocation({ lat: 28.6139, lng: 77.2090 });
-    }
+    };
+
+    getUserLocation();
   }, []);
 
- 
+  // Update map center when user location changes
+  useEffect(() => {
+    if (mapInstanceRef.current && userLocation && isMapLoaded) {
+      try {
+        // Center the map on user location
+        mapInstanceRef.current.flyTo({
+          center: [userLocation.lng, userLocation.lat],
+          zoom: 15,
+          duration: 2000
+        });
+        
+        // Add marker for user location
+        addUserLocationMarker(mapInstanceRef.current, userLocation);
+      } catch (error) {
+        console.warn('Error updating map center:', error);
+      }
+    }
+  }, [userLocation, isMapLoaded, addUserLocationMarker]);
 
   // Toggle map expansion
   const toggleMapExpansion = useCallback(() => {
@@ -168,6 +230,21 @@ export default function Dashboard() {
   const navigateToBooking = useCallback(() => {
     navigate('/booking/location');
   }, [navigate]);
+
+  // Center map on user location
+  const centerOnUserLocation = useCallback(() => {
+    if (userLocation && mapInstanceRef.current && isMapLoaded) {
+      try {
+        mapInstanceRef.current.flyTo({
+          center: [userLocation.lng, userLocation.lat],
+          zoom: 15,
+          duration: 1000
+        });
+      } catch (error) {
+        console.warn('Error centering map:', error);
+      }
+    }
+  }, [userLocation, isMapLoaded]);
 
   if (loading) {
     return (
@@ -202,7 +279,9 @@ export default function Dashboard() {
             >
               <X className="w-6 h-6" />
             </button>
-            <div className="w-full h-full" ref={mapRef}></div>
+            <div className="w-full h-full">
+              <div ref={mapRef} className="w-full h-full" />
+            </div>
           </div>
         </div>
       )}
@@ -259,10 +338,12 @@ export default function Dashboard() {
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-[#00D1C1]" />
                   Live Map
+                  {sdkLoaded && <span className="text-xs text-[#00D1C1] bg-[#00D1C1]/10 px-2 py-0.5 rounded-full">Live</span>}
                 </h3>
                 <button
                   onClick={toggleMapExpansion}
                   className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                  disabled={!isMapLoaded}
                 >
                   <Maximize className="w-4 h-4" />
                 </button>
@@ -270,40 +351,69 @@ export default function Dashboard() {
               
               <div className="relative h-64 bg-gray-900">
                 {!isMapExpanded && (
-                  <div ref={mapRef} className="w-full h-full"></div>
+                  <div 
+                    ref={mapContainerRef} 
+                    className="w-full h-full"
+                    style={{ minHeight: '256px' }}
+                  />
                 )}
                 
                 {mapError && (
-                  <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
-                    <div className="text-center">
+                  <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm bg-gray-900/80 backdrop-blur-sm">
+                    <div className="text-center p-4">
                       <MapPin className="w-8 h-8 mx-auto mb-2 text-white/40" />
-                      <p>{mapError}</p>
+                      <p className="font-medium mb-1">Map Unavailable</p>
+                      <p className="text-xs text-white/40">{mapError}</p>
+                      <button 
+                        onClick={() => window.location.reload()} 
+                        className="mt-3 px-3 py-1.5 bg-[#00D1C1]/20 text-[#00D1C1] rounded-full text-xs hover:bg-[#00D1C1]/30 transition-colors"
+                      >
+                        Retry
+                      </button>
                     </div>
                   </div>
                 )}
                 
-                {!isMapLoaded && !mapError && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-8 h-8 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin"></div>
+                {!isMapLoaded && !mapError && sdkLoaded && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-white/60 text-sm">Loading map...</p>
+                    </div>
+                  </div>
+                )}
+
+                {!sdkLoaded && !mapError && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
+                    <div className="text-center">
+                      <div className="w-8 h-8 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin mx-auto mb-2"></div>
+                      <p className="text-white/60 text-sm">Loading SDK...</p>
+                    </div>
                   </div>
                 )}
                 
                 {/* Map Controls */}
-                <div className="absolute bottom-4 right-4 flex flex-col gap-2">
-                  <button
-                    className="p-2 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
-                    onClick={() => {
-                      if (userLocation && mapInstanceRef.current) {
-                        mapInstanceRef.current.flyTo({
-                          center: [userLocation.lng, userLocation.lat],
-                          zoom: 15
-                        });
-                      }
-                    }}
-                  >
-                    <Navigation className="w-4 h-4" />
-                  </button>
-                </div>
+                {isMapLoaded && (
+                  <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                    <button
+                      className="p-2 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
+                      onClick={centerOnUserLocation}
+                      title="Center on my location"
+                    >
+                      <Navigation className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Location Status */}
+                {userLocation && (
+                  <div className="absolute bottom-4 left-4">
+                    <div className="px-2 py-1 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white/70 text-xs flex items-center gap-1">
+                      <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
+                      Location Active
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -461,30 +571,6 @@ export default function Dashboard() {
               <div className="grid grid-cols-4 gap-6">
                 <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#00D1C1]/20 rounded-xl flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-[#00D1C1]" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-white">{rides.length}</p>
-                      <p className="text-white/50 text-sm">Total Rides</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-[#1A1F36]/30 rounded-xl flex items-center justify-center">
-                      <Star className="w-6 h-6 text-[#1A1F36]" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-white">4.9</p>
-                      <p className="text-white/50 text-sm">Rating</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-6">
-                  <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
                       <Calendar className="w-6 h-6 text-white/60" />
                     </div>
@@ -517,59 +603,98 @@ export default function Dashboard() {
                     <h3 className="text-xl font-semibold text-white flex items-center gap-2">
                       <MapPin className="w-6 h-6 text-[#00D1C1]" />
                       Live Map View
+                      {sdkLoaded && <span className="text-xs text-[#00D1C1] bg-[#00D1C1]/10 px-2 py-1 rounded-full">Live</span>}
                     </h3>
-                    <button
-                      onClick={toggleMapExpansion}
-                      className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-                    >
-                      <Maximize className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {userLocation && (
+                        <div className="px-3 py-1 bg-[#00D1C1]/10 border border-[#00D1C1]/20 rounded-full text-[#00D1C1] text-xs flex items-center gap-1">
+                          <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
+                          Location Active
+                        </div>
+                      )}
+                      <button
+                        onClick={toggleMapExpansion}
+                        className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+                        disabled={!isMapLoaded}
+                      >
+                        <Maximize className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                   
                   <div className="relative h-96 bg-gray-900">
                     {!isMapExpanded && (
-                      <div ref={mapRef} className="w-full h-full"></div>
+                      <div 
+                        ref={mapContainerRef} 
+                        className="w-full h-full"
+                        style={{ minHeight: '384px' }}
+                      />
                     )}
                     
                     {mapError && (
-                      <div className="absolute inset-0 flex items-center justify-center text-white/60">
-                        <div className="text-center">
-                          <MapPin className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                          <p className="text-lg">{mapError}</p>
-                          <p className="text-sm text-white/40 mt-2">Check your internet connection and API key</p>
+                      <div className="absolute inset-0 flex items-center justify-center text-white/60 bg-gray-900/80 backdrop-blur-sm">
+                        <div className="text-center p-6">
+                          <MapPin className="w-16 h-16 mx-auto mb-4 text-white/40" />
+                          <h3 className="text-lg font-semibold text-white mb-2">Map Unavailable</h3>
+                          <p className="text-white/60 mb-4 max-w-md">{mapError}</p>
+                          <div className="space-y-2">
+                            <button 
+                              onClick={() => window.location.reload()} 
+                              className="px-4 py-2 bg-[#00D1C1]/20 text-[#00D1C1] rounded-xl hover:bg-[#00D1C1]/30 transition-colors font-medium"
+                            >
+                              Retry Loading
+                            </button>
+                            <p className="text-xs text-white/40">
+                              Check your internet connection and API key
+                            </p>
+                          </div>
                         </div>
                       </div>
                     )}
                     
-                    {!isMapLoaded && !mapError && (
-                      <div className="absolute inset-0 flex items-center justify-center">
+                    {!isMapLoaded && !mapError && sdkLoaded && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
                         <div className="text-center">
                           <div className="w-12 h-12 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin mx-auto mb-4"></div>
-                          <p className="text-white/60">Loading map...</p>
+                          <p className="text-white/60">Initializing map...</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {!sdkLoaded && !mapError && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900/50">
+                        <div className="text-center">
+                          <div className="w-12 h-12 border-2 border-[#00D1C1]/30 border-t-[#00D1C1] rounded-full animate-spin mx-auto mb-4"></div>
+                          <p className="text-white/60">Loading Ola Maps SDK...</p>
                         </div>
                       </div>
                     )}
                     
                     {/* Map Controls */}
-                    <div className="absolute bottom-6 right-6 flex flex-col gap-3">
-                      <button
-                        className="p-3 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors"
-                        onClick={() => {
-                          if (userLocation && mapInstanceRef.current) {
-                            try {
-                              mapInstanceRef.current.flyTo({
-                                center: [userLocation.lng, userLocation.lat],
-                                zoom: 15
-                              });
-                            } catch (error) {
-                              console.warn('Error flying to location:', error);
-                            }
-                          }
-                        }}
-                      >
-                        <Navigation className="w-5 h-5" />
-                      </button>
-                    </div>
+                    {isMapLoaded && (
+                      <div className="absolute bottom-6 right-6 flex flex-col gap-3">
+                        <button
+                          className="p-3 bg-black/50 backdrop-blur-sm border border-white/20 rounded-full text-white hover:bg-black/70 transition-colors group"
+                          onClick={centerOnUserLocation}
+                          title="Center on my location"
+                        >
+                          <Navigation className="w-5 h-5 group-hover:text-[#00D1C1] transition-colors" />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Map Info Panel */}
+                    {isMapLoaded && userLocation && (
+                      <div className="absolute bottom-6 left-6 bg-black/50 backdrop-blur-sm border border-white/20 rounded-xl p-3 text-white/80 text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <MapPin className="w-4 h-4 text-[#00D1C1]" />
+                          <span className="font-medium">Current Location</span>
+                        </div>
+                        <div className="text-xs text-white/60">
+                          Lat: {userLocation.lat.toFixed(4)}, Lng: {userLocation.lng.toFixed(4)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -742,7 +867,44 @@ export default function Dashboard() {
                   </p>
                   <div className="flex items-center gap-2 text-sm text-[#00D1C1]">
                     <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
-                    <span className="font-medium">Location Active</span>
+                    <span className="font-medium">
+                      {userLocation ? "Location Active" : "Locating..."}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* SDK Status Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#1A1F36]/30 to-[#00D1C1]/20 border border-white/10 rounded-2xl p-6">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-[#00D1C1]/10 rounded-full -translate-y-10 translate-x-10"></div>
+                <div className="relative">
+                  <div className="w-12 h-12 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-xl flex items-center justify-center mb-4">
+                    <MapPin className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-white mb-2">Map Status</h3>
+                  <p className="text-white/60 text-sm mb-4">
+                    {!sdkLoaded && !mapError ? "Loading Ola Maps SDK..." :
+                     mapError ? "Map service unavailable" :
+                     !isMapLoaded ? "Initializing map..." :
+                     "Map ready"}
+                  </p>
+                  <div className="flex items-center gap-2 text-sm">
+                    {sdkLoaded && isMapLoaded && !mapError ? (
+                      <>
+                        <div className="w-2 h-2 bg-[#00D1C1] rounded-full"></div>
+                        <span className="font-medium text-[#00D1C1]">Ready</span>
+                      </>
+                    ) : mapError ? (
+                      <>
+                        <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                        <span className="font-medium text-red-400">Error</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse"></div>
+                        <span className="font-medium text-yellow-400">Loading</span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

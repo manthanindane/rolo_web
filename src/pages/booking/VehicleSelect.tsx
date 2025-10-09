@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LuxuryButton } from '@/components/ui/luxury-button';
 import { useRoloStore } from '@/store/useRoloStore';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
-import { ArrowLeft, Users, Clock, Star, ArrowRight, Shield, Wifi, Coffee } from 'lucide-react';
+import { ArrowLeft, Users, Clock, Star, ArrowRight, Shield, Wifi, Coffee, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Vehicle {
@@ -48,16 +48,30 @@ export default function VehicleSelect(): JSX.Element {
     refetch.vehicles();
   }, [refetch]);
 
+  // Calculate pricing under ₹10 for testing
+  const calculateTestPrice = (base_price: number, price_per_km: number): number => {
+    // Keep prices very low for testing (under ₹10)
+    const basePrice = Math.max(base_price, 2);
+    const perKmPrice = Math.max(price_per_km, 0.5);
+    const estimatedDistance = 5; // 5 km average trip
+    
+    const totalPrice = basePrice + (perKmPrice * estimatedDistance);
+    
+    // Ensure price is under ₹10 and at least ₹1
+    return Math.max(Math.min(Math.round(totalPrice), 9), 1);
+  };
+
   // Transform database vehicles to include additional UI properties
   const luxuryVehicles: Vehicle[] = vehicles.map(vehicle => ({
     ...vehicle,
-    eta: "3-8 min", // Default ETA
-    seats: vehicle.type === 'suv' ? 6 : 4, // Default seats based on type
-    rating: 4.8, // Default rating
-    features: getVehicleFeatures(vehicle.type) // Get features based on type
+    eta: "3-8 min",
+    seats: vehicle.type === 'suv' ? 6 : 4,
+    rating: 4.8,
+    features: getVehicleFeatures(vehicle.type)
   }));
 
   const handleVehicleSelect = (vehicleId: string): void => {
+    console.log('Vehicle selected:', vehicleId);
     setSelectedVehicle(vehicleId);
   };
 
@@ -65,8 +79,7 @@ export default function VehicleSelect(): JSX.Element {
     const vehicle = luxuryVehicles.find(v => v.id === selectedVehicle);
     if (!vehicle) return;
     
-    // Calculate estimated price based on base_price and a sample distance
-    const estimatedPrice = vehicle.base_price + (vehicle.price_per_km * 10); // Assuming 10km average trip
+    const estimatedPrice = calculateTestPrice(vehicle.base_price, vehicle.price_per_km);
     
     updateBookingFlow({ 
       selectedVehicle: {
@@ -87,334 +100,267 @@ export default function VehicleSelect(): JSX.Element {
     navigate('/booking/location');
   };
 
-  // Mobile Card Component
-  const MobileVehicleCard: React.FC<{ vehicle: Vehicle; index: number }> = ({ vehicle, index }) => (
-    <div
-      className={cn(
-        "relative group cursor-pointer transition-all duration-500 md:hidden",
-        selectedVehicle === vehicle.id ? "scale-[1.02]" : "hover:scale-[1.01]"
-      )}
-      onClick={() => handleVehicleSelect(vehicle.id)}
-      style={{ animationDelay: `${index * 0.1}s` }}
-    >
-      {/* Glow Effect */}
-      <div className={cn(
-        "absolute -inset-1 bg-gradient-to-r rounded-3xl blur opacity-0 transition duration-500",
-        selectedVehicle === vehicle.id 
-          ? "from-[#1A1F36]/40 to-[#00D1C1]/40 opacity-40" 
-          : "from-[#1A1F36]/20 to-[#00D1C1]/20 group-hover:opacity-20"
-      )}></div>
-      
-      {/* Card */}
-      <div className={cn(
-        "relative bg-black/40 backdrop-blur-xl border rounded-3xl overflow-hidden transition-all duration-300",
-        selectedVehicle === vehicle.id
-          ? "border-[#00D1C1]/50 bg-black/60"
-          : "border-white/10 hover:border-white/20"
-      )}>
-        <div className="p-4">
-          {/* Vehicle Image */}
-          <div className="relative w-full h-32 mb-4 flex items-center justify-center">
-            <img
-              src={vehicle.image_url || "/placeholder.svg"}
-              alt={vehicle.name}
-              className="w-full h-full object-cover rounded-xl"
-              style={{
-                filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))'
-              }}
-            />
-            {/* Selection Indicator */}
-            {selectedVehicle === vehicle.id && (
-              <div className="absolute top-2 right-2">
-                <div className="w-6 h-6 bg-[#00D1C1] rounded-full flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white rounded-full"></div>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          {/* Vehicle Info */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-white">{vehicle.name}</h3>
-                <p className="text-[#00D1C1] text-sm font-medium">{vehicle.type}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-xl font-bold text-white">₹{vehicle.base_price + (vehicle.price_per_km * 10)}</div>
-                <div className="text-xs text-white/40">Estimated</div>
-              </div>
-            </div>
-            
-            <p className="text-white/60 text-sm">{vehicle.description}</p>
-            
-            {/* Stats */}
-            <div className="flex items-center justify-between text-xs text-white/50">
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{vehicle.eta}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                <span>{vehicle.seats} Adults</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 text-yellow-500" />
-                <span>{vehicle.rating}</span>
-              </div>
-            </div>
-            
-            {/* Features */}
-            <div className="flex flex-wrap gap-1">
-              {vehicle.features.slice(0, 3).map((feature, idx) => (
-                <span key={idx} className="text-xs px-2 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
-                  {feature}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // Vehicle Card Component - COMPLETELY FIXED CLICK HANDLING
+  const VehicleCard: React.FC<{ vehicle: Vehicle }> = ({ vehicle }) => {
+    const displayPrice = calculateTestPrice(vehicle.base_price, vehicle.price_per_km);
+    const isSelected = selectedVehicle === vehicle.id;
 
-  // Desktop Card Component
-  const DesktopVehicleCard: React.FC<{ vehicle: Vehicle; index: number }> = ({ vehicle, index }) => (
-    <div
-      className={cn(
-        "relative group cursor-pointer transition-all duration-500 hidden md:block",
-        selectedVehicle === vehicle.id ? "scale-[1.02]" : "hover:scale-[1.01]"
-      )}
-      onClick={() => handleVehicleSelect(vehicle.id)}
-      style={{ animationDelay: `${index * 0.1}s` }}
-    >
-      {/* Glow Effect */}
-      <div className={cn(
-        "absolute -inset-1 bg-gradient-to-r rounded-3xl blur opacity-0 transition duration-500",
-        selectedVehicle === vehicle.id 
-          ? "from-[#1A1F36]/40 to-[#00D1C1]/40 opacity-40" 
-          : "from-[#1A1F36]/20 to-[#00D1C1]/20 group-hover:opacity-20"
-      )}></div>
-      
-      {/* Card */}
-      <div className={cn(
-        "relative bg-black/40 backdrop-blur-xl border rounded-3xl overflow-hidden transition-all duration-300",
-        selectedVehicle === vehicle.id
-          ? "border-[#00D1C1]/50 bg-black/60"
-          : "border-white/10 hover:border-white/20"
-      )}>
-        <div className="flex items-center p-6">
-          {/* Vehicle Image */}
-          <div className="relative w-40 h-28 mr-6 flex-shrink-0">
-            <img
-              src={vehicle.image_url || "/placeholder.svg"}
-              alt={vehicle.name}
-              className="w-full h-full object-cover rounded-xl"
-              style={{
-                filter: 'drop-shadow(0 10px 20px rgba(0,0,0,0.3))'
-              }}
-            />
-            {/* Reflection Effect */}
-            <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/20 to-transparent rounded-b-xl"></div>
-          </div>
-          
-          {/* Vehicle Info */}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-bold text-white">{vehicle.name}</h3>
-              {selectedVehicle === vehicle.id && (
-                <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
+    // Single click handler at the top level
+    const handleCardClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      handleVehicleSelect(vehicle.id);
+    };
+
+    return (
+      <div
+        onClick={handleCardClick}
+        className={cn(
+          "relative cursor-pointer transition-all duration-200 group select-none",
+          "hover:shadow-lg hover:shadow-[#00D1C1]/5"
+        )}
+      >
+        {/* Card Content - pointer-events-none on all children to prevent blocking */}
+        <div className={cn(
+          "relative bg-black/40 backdrop-blur-xl border rounded-2xl overflow-hidden transition-all duration-200",
+          isSelected
+            ? "border-[#00D1C1]/50 bg-black/60 ring-2 ring-[#00D1C1]/30"
+            : "border-white/10 hover:border-white/20 hover:bg-black/50"
+        )}>
+          {/* Mobile Layout */}
+          <div className="block lg:hidden p-4 pointer-events-none">
+            {/* Vehicle Image */}
+            <div className="relative w-full h-32 mb-4 rounded-xl overflow-hidden">
+              <img
+                src={vehicle.image_url || "/placeholder.svg"}
+                alt={vehicle.name}
+                className="w-full h-full object-cover"
+                draggable="false"
+              />
+              {/* Selection Indicator */}
+              {isSelected && (
+                <div className="absolute top-2 right-2">
+                  <div className="w-6 h-6 bg-[#00D1C1] rounded-full flex items-center justify-center shadow-lg">
+                    <Check className="w-3 h-3 text-white" />
+                  </div>
+                </div>
               )}
             </div>
             
-            <p className="text-[#00D1C1] text-sm font-medium mb-1">{vehicle.type}</p>
-            <p className="text-white/60 text-sm mb-4">{vehicle.description}</p>
-            
-            {/* Features */}
-            <div className="flex items-center gap-4 text-xs text-white/50 mb-4">
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{vehicle.eta}</span>
+            {/* Vehicle Info */}
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-lg font-bold text-white truncate">{vehicle.name}</h3>
+                  <p className="text-[#00D1C1] text-sm font-medium capitalize">{vehicle.type.replace('_', ' ')}</p>
+                </div>
+                <div className="text-right ml-4">
+                  <div className="text-xl font-bold text-white">₹{displayPrice}</div>
+                  <div className="text-xs text-white/60">Estimated</div>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                <span>{vehicle.seats} Adults</span>
+              
+              {vehicle.description && (
+                <p className="text-white/70 text-sm line-clamp-2">{vehicle.description}</p>
+              )}
+              
+              {/* Stats */}
+              <div className="flex items-center justify-between text-xs text-white/60">
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>{vehicle.eta}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Users className="h-3 w-3" />
+                  <span>{vehicle.seats} seats</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Star className="h-3 w-3 fill-yellow-500 text-yellow-500" />
+                  <span>{vehicle.rating}</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Star className="h-3 w-3 text-yellow-500" />
-                <span>{vehicle.rating}</span>
-              </div>
-            </div>
-            
-            {/* Price and Features */}
-            <div className="flex items-center justify-between">
+              
+              {/* Features */}
               <div className="flex flex-wrap gap-1">
-                {vehicle.features.slice(0, 3).map((feature, idx) => (
-                  <span key={idx} className="text-xs px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/60">
+                {vehicle.features?.slice(0, 3).map((feature, idx) => (
+                  <span key={idx} className="text-xs px-2 py-1 bg-white/5 border border-white/10 rounded-full text-white/70">
                     {feature}
                   </span>
                 ))}
               </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold text-white">₹{vehicle.base_price + (vehicle.price_per_km * 10)}</div>
-                <div className="text-xs text-white/40">Estimated fare</div>
+            </div>
+          </div>
+
+          {/* Desktop Layout */}
+          <div className="hidden lg:block pointer-events-none">
+            <div className="flex items-center p-6 relative">
+              {/* Vehicle Image */}
+              <div className="relative w-40 h-28 mr-6 flex-shrink-0 rounded-xl overflow-hidden">
+                <img
+                  src={vehicle.image_url || "/placeholder.svg"}
+                  alt={vehicle.name}
+                  className="w-full h-full object-cover"
+                  draggable="false"
+                />
               </div>
+              
+              {/* Vehicle Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1 min-w-0 pr-6">
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="text-xl font-bold text-white truncate">{vehicle.name}</h3>
+                      {isSelected && (
+                        <div className="w-2 h-2 bg-[#00D1C1] rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+                    <p className="text-[#00D1C1] text-sm font-medium capitalize mb-1">{vehicle.type.replace('_', ' ')}</p>
+                    {vehicle.description && (
+                      <p className="text-white/70 text-sm mb-4 line-clamp-2">{vehicle.description}</p>
+                    )}
+                  </div>
+                  <div className="text-right ml-6 flex-shrink-0">
+                    <div className="text-3xl font-bold text-white">₹{displayPrice}</div>
+                    <div className="text-xs text-white/60">Estimated fare</div>
+                  </div>
+                </div>
+                
+                {/* Stats */}
+                <div className="flex items-center gap-6 text-sm text-white/60 mb-4">
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    <span>{vehicle.eta}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
+                    <span>{vehicle.seats} seats</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
+                    <span>{vehicle.rating}</span>
+                  </div>
+                </div>
+                
+                {/* Features */}
+                <div className="flex flex-wrap gap-2">
+                  {vehicle.features?.slice(0, 4).map((feature, idx) => (
+                    <span key={idx} className="text-sm px-3 py-1 bg-white/5 border border-white/10 rounded-full text-white/70">
+                      {feature}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Selection Indicator - Desktop */}
+              {isSelected && (
+                <div className="absolute top-4 right-4">
+                  <div className="w-8 h-8 bg-[#00D1C1] rounded-full flex items-center justify-center shadow-lg shadow-[#00D1C1]/50">
+                    <Check className="w-4 h-4 text-white" />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
-        
-        {/* Selection Indicator */}
-        {selectedVehicle === vehicle.id && (
-          <div className="absolute top-6 right-6">
-            <div className="w-8 h-8 bg-[#00D1C1] rounded-full flex items-center justify-center">
-              <div className="w-3 h-3 bg-white rounded-full"></div>
-            </div>
-          </div>
-        )}
       </div>
-    </div>
-  );
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] relative overflow-hidden font-['Plus_Jakarta_Sans']">
-      {/* Premium Background Effects */}
-      <div className="absolute inset-0">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#1A1F36]/15 via-transparent to-[#00D1C1]/8"></div>
-        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-gradient-radial from-[#00D1C1]/5 to-transparent rounded-full blur-3xl"></div>
-        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-gradient-radial from-[#1A1F36]/8 to-transparent rounded-full blur-3xl"></div>
-        <div className="absolute inset-0 opacity-[0.02]" 
-             style={{
-               backgroundImage: 'radial-gradient(circle at 1px 1px, rgba(255,255,255,0.15) 1px, transparent 0)',
-               backgroundSize: '20px 20px'
-             }}>
-        </div>
+    <div className="min-h-screen bg-[#0A0A0B] relative font-['Plus_Jakarta_Sans']">
+      {/* Background Effects - Simplified */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1A1F36]/10 via-transparent to-[#00D1C1]/5"></div>
+        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-[#00D1C1]/3 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-[#1A1F36]/5 rounded-full blur-3xl"></div>
       </div>
 
       <div className="relative z-10">
-        {/* Mobile Layout */}
-        <div className="md:hidden p-4">
+        <div className="container mx-auto px-4 lg:px-8 max-w-6xl">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between py-6 mb-6">
             <button
               onClick={handleBack}
-              className="w-12 h-12 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all duration-300"
+              className="w-12 h-12 lg:w-14 lg:h-14 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all duration-200"
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5 lg:h-6 lg:w-6" />
             </button>
-            <h1 className="text-lg font-bold text-white">Choose Ride</h1>
-            <div className="w-12" />
+            <div className="text-center">
+              <h1 className="text-xl lg:text-3xl font-bold text-white">Choose your ride</h1>
+              <p className="text-white/60 text-sm lg:text-base mt-1 hidden lg:block">Premium vehicles for your journey</p>
+            </div>
+            <div className="w-12 lg:w-14" />
           </div>
 
           {/* Route Summary */}
-          <div className="relative group mb-6">
-            <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36]/20 to-[#00D1C1]/20 rounded-2xl blur opacity-20"></div>
-            <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-4">
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-[#00D1C1] rounded-full"></div>
-                  <span className="text-white/80 truncate">{bookingFlow.pickup || "Current Location"}</span>
+          <div className="relative mb-6 lg:mb-8">
+            <div className="bg-black/30 backdrop-blur-xl border border-white/10 rounded-2xl p-4 lg:p-6 max-w-md mx-auto">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-[#00D1C1] rounded-full flex-shrink-0"></div>
+                  <span className="text-white/80 text-sm lg:text-base truncate">
+                    {bookingFlow.pickup || "Current Location"}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <span className="text-white/80 truncate">{bookingFlow.dropoff || "Destination"}</span>
+                <div className="w-px h-4 bg-white/20 ml-1.5"></div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-red-500 rounded-full flex-shrink-0"></div>
+                  <span className="text-white/80 text-sm lg:text-base truncate">
+                    {bookingFlow.dropoff || "Destination"}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Vehicle Grid - Mobile */}
-          <div className="space-y-4 mb-6">
-            {luxuryVehicles.map((vehicle, index) => (
-              <MobileVehicleCard key={vehicle.id} vehicle={vehicle} index={index} />
-            ))}
+          {/* Vehicle List */}
+          <div className="space-y-4 mb-6 lg:mb-8">
+            {luxuryVehicles.length > 0 ? (
+              luxuryVehicles.map((vehicle) => (
+                <VehicleCard key={vehicle.id} vehicle={vehicle} />
+              ))
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-white/60 text-lg">Loading vehicles...</p>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Desktop Layout */}
-        <div className="hidden md:block">
-          <div className="max-w-6xl mx-auto p-8">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-12">
-              <button
-                onClick={handleBack}
-                className="w-14 h-14 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all duration-300"
-              >
-                <ArrowLeft className="h-6 w-6" />
-              </button>
-              <div className="text-center">
-                <h1 className="text-3xl font-bold text-white mb-2">Choose your preferred ride</h1>
-                <p className="text-white/60">Premium vehicles for your luxury journey</p>
-              </div>
-              <div className="w-14" />
+          {/* Trust Indicators - Desktop Only */}
+          <div className="hidden lg:flex items-center justify-center gap-8 text-white/40 mb-8">
+            <div className="flex items-center gap-2">
+              <Shield className="w-4 h-4 text-[#00D1C1]" />
+              <span className="text-sm">Verified Drivers</span>
             </div>
-
-            {/* Route Summary */}
-            <div className="relative group mb-12 max-w-md mx-auto">
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36]/20 to-[#00D1C1]/20 rounded-2xl blur opacity-20"></div>
-              <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 bg-[#00D1C1] rounded-full"></div>
-                    <span className="text-white/80">{bookingFlow.pickup || "Current Location"}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 bg-red-500 rounded-full"></div>
-                    <span className="text-white/80">{bookingFlow.dropoff || "Destination"}</span>
-                  </div>
-                </div>
-              </div>
+            <div className="w-px h-4 bg-white/20"></div>
+            <div className="flex items-center gap-2">
+              <Wifi className="w-4 h-4 text-[#00D1C1]" />
+              <span className="text-sm">Free WiFi</span>
             </div>
-
-            {/* Vehicle Grid - Desktop */}
-            <div className="space-y-6 mb-12">
-              {luxuryVehicles.map((vehicle, index) => (
-                <DesktopVehicleCard key={vehicle.id} vehicle={vehicle} index={index} />
-              ))}
+            <div className="w-px h-4 bg-white/20"></div>
+            <div className="flex items-center gap-2">
+              <Coffee className="w-4 h-4 text-[#00D1C1]" />
+              <span className="text-sm">Complimentary Refreshments</span>
             </div>
           </div>
         </div>
 
-        {/* Book Now Button - Fixed Bottom */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#0A0A0B] via-[#0A0A0B]/95 to-transparent backdrop-blur-xl md:relative md:bg-none md:backdrop-blur-none">
-          <div className="max-w-6xl mx-auto">
-            <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
-              <button
-                onClick={handleNext}
-                disabled={!selectedVehicle}
-                className={cn(
-                  "relative w-full py-4 px-6 rounded-2xl font-semibold text-base transition-all duration-300 flex items-center justify-center gap-3",
-                  selectedVehicle
-                    ? "bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white hover:shadow-2xl hover:shadow-[#00D1C1]/20 hover:scale-[1.02]"
-                    : "bg-white/5 text-white/40 cursor-not-allowed border border-white/10"
-                )}
-              >
-                <span>{selectedVehicle ? "Book Now" : "Select a Vehicle"}</span>
-                {selectedVehicle && <ArrowRight className="w-5 h-5" />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Trust Indicators - Desktop Only */}
-        <div className="hidden md:block">
-          <div className="max-w-6xl mx-auto px-8 pb-8">
-            <div className="flex items-center justify-center gap-8 text-white/30">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-[#00D1C1]" />
-                <span className="text-sm">Verified Drivers</span>
-              </div>
-              <div className="w-px h-4 bg-white/10"></div>
-              <div className="flex items-center gap-2">
-                <Wifi className="w-4 h-4 text-[#00D1C1]" />
-                <span className="text-sm">Free WiFi</span>
-              </div>
-              <div className="w-px h-4 bg-white/10"></div>
-              <div className="flex items-center gap-2">
-                <Coffee className="w-4 h-4 text-[#00D1C1]" />
-                <span className="text-sm">Complimentary Refreshments</span>
-              </div>
-            </div>
+        {/* Book Now Button - Fixed Bottom on Mobile, Static on Desktop */}
+        <div className="sticky bottom-0 lg:static p-4 lg:p-0 bg-gradient-to-t from-[#0A0A0B] via-[#0A0A0B]/95 to-transparent lg:bg-none backdrop-blur-xl lg:backdrop-blur-none border-t border-white/5 lg:border-0">
+          <div className="container mx-auto px-0 lg:px-8 max-w-6xl">
+            <button
+              onClick={handleNext}
+              disabled={!selectedVehicle}
+              className={cn(
+                "w-full py-4 px-6 rounded-2xl font-semibold text-base lg:text-lg transition-all duration-200 flex items-center justify-center gap-3",
+                selectedVehicle
+                  ? "bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] text-white hover:shadow-xl hover:shadow-[#00D1C1]/20 hover:scale-[1.02] active:scale-[0.98]"
+                  : "bg-white/10 text-white/50 cursor-not-allowed border border-white/20"
+              )}
+            >
+              <span>{selectedVehicle ? "Book Now" : "Select a Vehicle"}</span>
+              {selectedVehicle && <ArrowRight className="w-5 h-5" />}
+            </button>
           </div>
         </div>
       </div>

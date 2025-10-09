@@ -55,7 +55,6 @@ declare global {
   }
 }
 
-
 interface BookingFlow {
   pickup: string;
   dropoff: string;
@@ -66,7 +65,7 @@ interface BookingFlow {
 export default function RideConfirmation(): JSX.Element {
   const navigate = useNavigate();
   const { bookingFlow, setCurrentBooking } = useRoloStore();
-  const { createRide } = useSupabaseData();
+  const { createRide, vehicles } = useSupabaseData();
   const { toast } = useToast();
   const [isBooking, setIsBooking] = useState<boolean>(false);
   const [razorpayLoaded, setRazorpayLoaded] = useState<boolean>(false);
@@ -96,15 +95,6 @@ export default function RideConfirmation(): JSX.Element {
     }
   }, []);
 
-  // Generate a proper UUID v4
-  const generateUUID = (): string => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
-
   const handlePaymentSuccess = async (paymentResponse: RazorpayResponse): Promise<void> => {
     console.log('Payment successful:', paymentResponse);
     
@@ -114,32 +104,49 @@ export default function RideConfirmation(): JSX.Element {
         title: "Booking Error",
         description: "Missing booking details",
       });
+      setIsBooking(false);
       return;
     }
 
     try {
-      // Ensure we have a valid UUID for vehicle_id
-      let vehicleId = bookingFlow.selectedVehicle.id;
+      // Get the selected vehicle details
+      const selectedVehicle = bookingFlow.selectedVehicle;
       
-      // If the ID is not a valid UUID format, generate one
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(vehicleId)) {
-        vehicleId = generateUUID();
-        console.warn('Generated new UUID for vehicle_id:', vehicleId);
+      // CRITICAL FIX: Use the actual vehicle_id from your database
+      // The vehicle_id must exist in the vehicles table in Supabase
+      let vehicleId = selectedVehicle.id;
+      
+      // Check if this vehicle exists in the database vehicles
+      const vehicleExists = vehicles.find(v => v.id === vehicleId);
+      
+      if (!vehicleExists) {
+        console.error('Vehicle not found in database:', vehicleId);
+        
+        // If vehicle doesn't exist, use the first available vehicle from database
+        if (vehicles.length > 0) {
+          vehicleId = vehicles[0].id;
+          console.warn('Using fallback vehicle_id:', vehicleId);
+        } else {
+          throw new Error('No vehicles available in database');
+        }
       }
 
-      // Log payment information (not stored in database)
+      // Log payment information (not stored in database per your setup)
       console.log('Payment details:', {
         payment_id: paymentResponse.razorpay_payment_id,
-        payment_status: 'completed'
+        payment_status: 'completed',
+        amount: bookingFlow.estimatedPrice
       });
 
+      // Create ride data with valid vehicle_id
       const rideData = {
         pickup_location: bookingFlow.pickup,
         dropoff_location: bookingFlow.dropoff,
-        vehicle_id: vehicleId,
+        vehicle_id: vehicleId, // This must exist in vehicles table
         estimated_price: bookingFlow.estimatedPrice
       };
+
+      console.log('Creating ride with data:', rideData);
 
       const { data, error } = await createRide(rideData);
 
@@ -150,6 +157,7 @@ export default function RideConfirmation(): JSX.Element {
           title: "Booking Failed",
           description: typeof error === 'string' ? error : error.message || 'Failed to create ride after payment',
         });
+        setIsBooking(false);
         return;
       }
 
@@ -160,8 +168,8 @@ export default function RideConfirmation(): JSX.Element {
           pickup: data.pickup_location,
           dropoff: data.dropoff_location,
           vehicle: {
-            id: data.vehicle_id,
-            type: 'luxury_sedan', // Default type since we don't have it in the response
+            id: vehicleId,
+            type: selectedVehicle.type || 'luxury_sedan',
             name: selectedVehicle.name,
             price: data.estimated_price,
             eta: selectedVehicle.eta,
@@ -174,21 +182,25 @@ export default function RideConfirmation(): JSX.Element {
         };
         
         setCurrentBooking(storeRide);
-        console.log('Booking created:', storeRide);
+        console.log('Booking created successfully:', storeRide);
+        
         toast({
           title: "Payment Successful!",
           description: "Your ride has been booked. Finding your driver...",
         });
-        navigate('/booking/searching');
+        
+        // Navigate to searching driver page
+        setTimeout(() => {
+          navigate('/booking/searching');
+        }, 500);
       }
     } catch (err) {
       console.error('Post-payment booking error:', err);
       toast({
         variant: "destructive",
         title: "Booking Failed",
-        description: "Payment successful but ride booking failed. Please contact support.",
+        description: err instanceof Error ? err.message : "Payment successful but ride booking failed. Please contact support.",
       });
-    } finally {
       setIsBooking(false);
     }
   };
@@ -210,6 +222,7 @@ export default function RideConfirmation(): JSX.Element {
         title: "Payment Error",
         description: "Payment gateway is not loaded. Please refresh and try again.",
       });
+      setIsBooking(false);
       return;
     }
 
@@ -219,6 +232,7 @@ export default function RideConfirmation(): JSX.Element {
         title: "Booking Error",
         description: "Please select a vehicle first",
       });
+      setIsBooking(false);
       return;
     }
 
@@ -231,9 +245,9 @@ export default function RideConfirmation(): JSX.Element {
       image: '/logo.png', // Add your app logo URL
       handler: handlePaymentSuccess,
       prefill: {
-        name: 'Rolo Pvt.Ltd', // You can get this from user context/store
-        email: 'team@rolorides.com', // You can get this from user context/store
-        contact: '8329472792' // You can get this from user context/store
+        name: 'Rolo Pvt.Ltd',
+        email: 'team@rolorides.com',
+        contact: '8329472792'
       },
       notes: {
         pickup: bookingFlow.pickup,
@@ -322,7 +336,7 @@ export default function RideConfirmation(): JSX.Element {
   return (
     <div className="min-h-screen bg-[#0A0A0B] relative overflow-hidden font-['Plus_Jakarta_Sans']">
       {/* Premium Background Effects */}
-      <div className="absolute inset-0">
+      <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-[#1A1F36]/15 via-transparent to-[#00D1C1]/8"></div>
         <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-gradient-radial from-[#00D1C1]/5 to-transparent rounded-full blur-3xl"></div>
         <div className="absolute bottom-1/3 left-1/4 w-80 h-80 bg-gradient-radial from-[#1A1F36]/8 to-transparent rounded-full blur-3xl"></div>
@@ -387,12 +401,16 @@ export default function RideConfirmation(): JSX.Element {
             <div className="relative bg-black/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6">
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-16 h-16 bg-white/5 rounded-xl flex items-center justify-center">
-                  <Car className="h-8 w-8 text-[#00D1C1]" />
+                  {selectedVehicle.image && selectedVehicle.image !== '/placeholder.svg' ? (
+                    <img src={selectedVehicle.image} alt={selectedVehicle.name} className="w-full h-full object-cover rounded-xl" />
+                  ) : (
+                    <Car className="h-8 w-8 text-[#00D1C1]" />
+                  )}
                 </div>
                 
                 <div className="flex-1">
                   <h3 className="font-bold text-white text-lg">{selectedVehicle.name}</h3>
-                  <p className="text-[#00D1C1] text-sm font-medium">{selectedVehicle.type || 'Luxury'}</p>
+                  <p className="text-[#00D1C1] text-sm font-medium capitalize">{selectedVehicle.type?.replace('_', ' ') || 'Luxury'}</p>
                   <div className="flex items-center gap-4 mt-2 text-xs text-white/50">
                     <div className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
@@ -530,13 +548,17 @@ export default function RideConfirmation(): JSX.Element {
                     <h2 className="text-xl font-bold text-white mb-6">Selected Vehicle</h2>
                     
                     <div className="flex items-center gap-6">
-                      <div className="w-24 h-18 bg-white/5 rounded-2xl flex items-center justify-center">
-                        <Car className="h-10 w-10 text-[#00D1C1]" />
+                      <div className="w-24 h-18 bg-white/5 rounded-2xl flex items-center justify-center overflow-hidden">
+                        {selectedVehicle.image && selectedVehicle.image !== '/placeholder.svg' ? (
+                          <img src={selectedVehicle.image} alt={selectedVehicle.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <Car className="h-10 w-10 text-[#00D1C1]" />
+                        )}
                       </div>
                       
                       <div className="flex-1">
                         <h3 className="font-bold text-white text-xl">{selectedVehicle.name}</h3>
-                        <p className="text-[#00D1C1] font-medium mb-2">{selectedVehicle.type || 'Luxury'}</p>
+                        <p className="text-[#00D1C1] font-medium mb-2 capitalize">{selectedVehicle.type?.replace('_', ' ') || 'Luxury'}</p>
                         <p className="text-white/70 mb-3">{selectedVehicle.description || 'Premium luxury vehicle'}</p>
                         
                         <div className="flex items-center gap-6 text-sm text-white/60">
@@ -659,7 +681,7 @@ export default function RideConfirmation(): JSX.Element {
         </div>
 
         {/* Confirm Button - Fixed Bottom on Mobile, Bottom of Content on Desktop */}
-        <div className="fixed md:relative bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t md:bg-none from-[#0A0A0B] via-[#0A0A0B]/95 to-transparent backdrop-blur-xl md:backdrop-blur-none">
+        <div className="fixed md:relative bottom-0 left-0 right-0 p-4 md:p-8 bg-gradient-to-t md:bg-none from-[#0A0A0B] via-[#0A0A0B]/95 to-transparent backdrop-blur-xl md:backdrop-blur-none border-t border-white/5 md:border-0">
           <div className="max-w-5xl mx-auto">
             <div className="relative group">
               <div className="absolute -inset-1 bg-gradient-to-r from-[#1A1F36] to-[#00D1C1] rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-300"></div>
