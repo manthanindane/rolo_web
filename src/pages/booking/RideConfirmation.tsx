@@ -237,7 +237,7 @@ export default function RideConfirmation(): JSX.Element {
     }
 
     const options: RazorpayOptions = {
-      key: 'rzp_live_RHW97oiHDY3dQq', // Your Razorpay key
+      key: 'rzp_live_test', // Your Razorpay key
       amount: bookingFlow.estimatedPrice * 100, // Amount in paise (multiply by 100)
       currency: 'INR',
       name: 'ROLO Rides',
