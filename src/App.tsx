@@ -11,6 +11,8 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import RideHistory from "./pages/RideHistory";
+import Settings from "./pages/Settings";
+import ContactUs from "./pages/ContactUs";
 
 // Import booking flow pages
 import LocationSelect from "./pages/booking/LocationSelect";
@@ -67,6 +69,16 @@ const AppRoutes = () => (
       <Route path="/rides" element={
         <ProtectedRoute>
           <RideHistory />
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <Settings />
+        </ProtectedRoute>
+      } />
+      <Route path="/contact" element={
+        <ProtectedRoute>
+          <ContactUs />
         </ProtectedRoute>
       } />
       

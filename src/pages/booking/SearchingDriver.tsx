@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { useRoloStore } from '@/store/useRoloStore';
 import { Loader2, Star, Car, Clock, MapPin, Phone, Sparkles } from 'lucide-react';
+import BookingFlowGuard from '@/components/BookingFlowGuard';
 
 const mockDriver = {
   id: '1',
@@ -55,7 +56,8 @@ export default function SearchingDriver() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4 relative overflow-hidden font-['Plus_Jakarta_Sans']">
+    <BookingFlowGuard requiredStep="searching">
+      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center px-4 relative overflow-hidden font-['Plus_Jakarta_Sans']">
       {/* Premium Background Effects */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-gradient-to-br from-[#1A1F36]/15 via-transparent to-[#00D1C1]/8"></div>
@@ -258,5 +260,6 @@ export default function SearchingDriver() {
       <div className="absolute bottom-32 left-20 w-px h-12 bg-gradient-to-b from-transparent via-[#1A1F36]/30 to-transparent"></div>
       <div className="absolute bottom-40 right-12 w-2 h-2 bg-[#00D1C1]/30 rounded-full"></div>
     </div>
+    </BookingFlowGuard>
   );
 }

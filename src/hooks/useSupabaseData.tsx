@@ -89,19 +89,19 @@ export function useSupabaseData() {
       }
     ];
     
-    setVehicles(mockVehicles);
-    
-    // Uncomment below to use real Supabase data instead of mock data
-    /*
+    // Try Supabase first; fallback to mock on error/empty
     const { data, error } = await supabase
       .from('vehicles')
       .select('*')
       .eq('is_available', true);
-    
-    if (!error && data) {
-      setVehicles(data);
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      setVehicles(data as unknown as Vehicle[]);
+      return;
     }
-    */
+
+    // Fallback to mock if no data available
+    setVehicles(mockVehicles as unknown as Vehicle[]);
   };
 
   // Fetch drivers
@@ -217,6 +217,55 @@ export function useSupabaseData() {
     return { data, error };
   };
 
+  // Ensure a valid vehicle exists in DB, create one if needed, and return it
+  const ensureVehicle = async (vehicleLike: Partial<Vehicle>) => {
+    // First try to find an existing available vehicle matching name/type
+    const normalizedType = (vehicleLike.type || '').toLowerCase();
+    const allowedTypes = new Set(['sedan', 'suv', 'limousine', 'luxury_sedan']);
+    const finalType = allowedTypes.has(normalizedType) ? (normalizedType as any) : 'sedan';
+
+    // try fetch fresh list from DB
+    const { data: dbVehicles } = await supabase
+      .from('vehicles')
+      .select('*')
+      .eq('is_available', true);
+
+    const existing = (dbVehicles || []).find((v: any) =>
+      (vehicleLike.name && v.name?.toLowerCase() === (vehicleLike.name || '').toLowerCase()) ||
+      (vehicleLike.type && v.type?.toLowerCase() === finalType)
+    );
+
+    if (existing) {
+      return existing as unknown as Vehicle;
+    }
+
+    // Create a basic vehicle row
+    const insertPayload = {
+      name: vehicleLike.name || 'Sedan',
+      type: finalType,
+      price_per_km: typeof (vehicleLike as any).price_per_km === 'number' ? (vehicleLike as any).price_per_km : 1,
+      base_price: typeof (vehicleLike as any).base_price === 'number' ? (vehicleLike as any).base_price : 5,
+      description: vehicleLike.description || null,
+      image_url: (vehicleLike as any).image_url || null,
+      is_available: true,
+    };
+
+    const { data: created, error } = await supabase
+      .from('vehicles')
+      .insert([insertPayload])
+      .select('*')
+      .single();
+
+    if (error || !created) {
+      return { error } as any;
+    }
+
+    // refresh local cache
+    await fetchVehicles();
+
+    return created as unknown as Vehicle;
+  };
+
   // Update ride
   const updateRide = async (rideId: string, updates: Partial<{
     status: 'pending' | 'confirmed' | 'driver_assigned' | 'in_progress' | 'completed' | 'cancelled';
@@ -290,6 +339,7 @@ export function useSupabaseData() {
     profile,
     loading,
     createRide,
+    ensureVehicle,
     updateRide,
     updateProfile,
     refetch: {

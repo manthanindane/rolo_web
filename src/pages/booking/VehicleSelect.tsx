@@ -5,6 +5,7 @@ import { useRoloStore } from '@/store/useRoloStore';
 import { useSupabaseData } from '@/hooks/useSupabaseData';
 import { ArrowLeft, Users, Clock, Star, ArrowRight, Shield, Wifi, Coffee, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import BookingFlowGuard from '@/components/BookingFlowGuard';
 
 interface Vehicle {
   id: string;
@@ -267,7 +268,8 @@ export default function VehicleSelect(): JSX.Element {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] relative font-['Plus_Jakarta_Sans']">
+    <BookingFlowGuard requiredStep="vehicle">
+      <div className="min-h-screen bg-[#0A0A0B] relative font-['Plus_Jakarta_Sans']">
       {/* Background Effects - Simplified */}
       <div className="absolute inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-[#1A1F36]/10 via-transparent to-[#00D1C1]/5"></div>
@@ -365,5 +367,6 @@ export default function VehicleSelect(): JSX.Element {
         </div>
       </div>
     </div>
+    </BookingFlowGuard>
   );
 }

@@ -116,6 +116,7 @@ export default function Profile() {
                 <LuxuryButton
                   variant="ghost"
                   className="w-full justify-start"
+                  onClick={() => navigate('/settings')}
                 >
                   <CreditCard className="h-4 w-4 mr-3" />
                   Payment Settings
@@ -124,6 +125,7 @@ export default function Profile() {
                 <LuxuryButton
                   variant="ghost"
                   className="w-full justify-start"
+                  onClick={() => navigate('/settings')}
                 >
                   <User className="h-4 w-4 mr-3" />
                   Account Settings

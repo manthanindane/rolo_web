@@ -50,7 +50,7 @@ const AutoCompleteInput = ({
   placeholder, 
   label, 
   showCurrentLocation = false,
-  onCurrentLocation 
+  onCurrentLocation = () => {}
 }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -127,7 +127,10 @@ const AutoCompleteInput = ({
 
   // Handle suggestion selection
   const handleSuggestionSelect = (suggestion) => {
-    onChange(suggestion.description);
+    const main = suggestion.structured_formatting?.main_text || '';
+    const secondary = suggestion.structured_formatting?.secondary_text || '';
+    const compact = secondary ? `${main}, ${secondary}` : main || suggestion.description;
+    onChange(compact);
     onSelect && onSelect(suggestion);
     setShowSuggestions(false);
     setFocusedIndex(-1);
@@ -235,7 +238,7 @@ const AutoCompleteInput = ({
       {showSuggestions && (suggestions.length > 0 || isLoading) && (
         <div 
           ref={suggestionsRef}
-          className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto"
+          className="absolute top-full left-0 right-0 mt-2 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-[9999] max-h-64 overflow-y-auto"
         >
           {isLoading && suggestions.length === 0 ? (
             <div className="p-4 text-center text-white/60">
@@ -246,7 +249,10 @@ const AutoCompleteInput = ({
             suggestions.map((suggestion, index) => (
               <button
                 key={suggestion.place_id || index}
-                onClick={() => handleSuggestionSelect(suggestion)}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSuggestionSelect(suggestion);
+                }}
                 className={`w-full flex items-center gap-3 p-4 text-left hover:bg-white/10 transition-colors ${
                   index === focusedIndex ? 'bg-white/10' : ''
                 } ${index === 0 ? 'rounded-t-xl' : ''} ${index === suggestions.length - 1 ? 'rounded-b-xl' : ''}`}
@@ -286,9 +292,7 @@ export default function LocationSelect() {
     
     updateBookingFlow({ 
       pickup, 
-      dropoff,
-      pickupDetails: selectedPickup,
-      dropoffDetails: selectedDropoff
+      dropoff
     });
     navigate('/booking/vehicle');
   };

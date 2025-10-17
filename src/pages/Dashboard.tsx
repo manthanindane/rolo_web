@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 // Ola Maps Configuration
-const KRUTRIM_API_KEY = "G0eGxIsSerBkUv2JkB94c3A148zpxUaM9LaoPB9t";
+const KRUTRIM_API_KEY = (import.meta as any).env?.VITE_OLA_MAPS_API_KEY || "G0eGxIsSerBkUv2JkB94c3A148zpxUaM9LaoPB9t";
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -76,15 +76,16 @@ export default function Dashboard() {
   // Initialize Ola Maps SDK
   useEffect(() => {
     const loadOlaMapsSdk = () => {
-      // Check if SDK is already loaded
-      if (window.OlaMaps) {
+      // Check if SDK is already loaded (support both globals)
+      // @ts-ignore
+      if ((window as any).OlaMaps || (window as any).olaMaps) {
         setSdkLoaded(true);
         return;
       }
 
       // Create and load the script
       const script = document.createElement('script');
-      script.src = 'https://api.olamaps.io/tiles/v1/sdk/js';
+      script.src = `https://api.olamaps.io/tiles/v1/sdk/js?key=${KRUTRIM_API_KEY}`;
       script.async = true;
       
       script.onload = () => {
@@ -115,24 +116,41 @@ export default function Dashboard() {
   // Initialize the map once SDK is loaded
   useEffect(() => {
     const initializeMap = async () => {
-      if (!sdkLoaded || !window.OlaMaps || !mapContainerRef.current || mapInstanceRef.current) {
+      // @ts-ignore
+      const hasGlobal = (window as any).OlaMaps || (window as any).olaMaps;
+      if (!sdkLoaded || !hasGlobal || !mapContainerRef.current || mapInstanceRef.current) {
         return;
       }
 
       try {
         console.log('Initializing Ola Maps...');
         
-        // Initialize Ola Maps
-        const olaMaps = new window.OlaMaps({
-          apiKey: KRUTRIM_API_KEY,
-        });
-
-        const mapInstance = olaMaps.init({
-          style: 'default',
-          container: mapContainerRef.current,
-          center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139], // Default to Delhi
-          zoom: userLocation ? 15 : 10,
-        });
+        let mapInstance: any = null;
+        // Prefer official constructor if present
+        // @ts-ignore
+        if ((window as any).OlaMaps) {
+          // @ts-ignore
+          const OlaMapsCtor = (window as any).OlaMaps;
+          const olaMaps = new OlaMapsCtor({ apiKey: KRUTRIM_API_KEY });
+          mapInstance = olaMaps.init({
+            // Use Ola Maps Vector Tiles (MapLibre style spec)
+            style: `https://api.olamaps.io/tiles/v1/styles/default/style.json?key=${KRUTRIM_API_KEY}`,
+            container: mapContainerRef.current,
+            center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139],
+            zoom: userLocation ? 15 : 10,
+          });
+        } else {
+          // Fallback: Mapbox-like API exposed under window.olaMaps
+          // @ts-ignore
+          const olaMapsNS = (window as any).olaMaps;
+          mapInstance = new olaMapsNS.Map({
+            apiKey: KRUTRIM_API_KEY,
+            style: `https://api.olamaps.io/tiles/v1/styles/default/style.json?key=${KRUTRIM_API_KEY}`,
+            container: mapContainerRef.current,
+            center: userLocation ? [userLocation.lng, userLocation.lat] : [77.2090, 28.6139],
+            zoom: userLocation ? 15 : 10,
+          });
+        }
 
         mapInstanceRef.current = mapInstance;
 
@@ -155,7 +173,7 @@ export default function Dashboard() {
 
       } catch (error) {
         console.error('Map initialization error:', error);
-        setMapError(`Map initialization failed: ${error.message}`);
+        setMapError(`Map initialization failed: ${(error as any)?.message || 'Unknown error'}`);
       }
     };
 
@@ -280,7 +298,8 @@ export default function Dashboard() {
               <X className="w-6 h-6" />
             </button>
             <div className="w-full h-full">
-              <div ref={mapRef} className="w-full h-full" />
+              {/* Reuse the same map container so the instance remains visible when expanded */}
+              <div ref={mapContainerRef} className="w-full h-full" />
             </div>
           </div>
         </div>
@@ -501,6 +520,9 @@ export default function Dashboard() {
                       
                       <div className="text-right space-y-1">
                         <p className="font-semibold text-white">${ride.final_price || ride.estimated_price}</p>
+                        {ride.status !== 'completed' && (
+                          <span className="mt-1 inline-block text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">Payment Pending</span>
+                        )}
                         <p className="text-xs text-white/50">{ride.vehicle?.name || 'Premium'}</p>
                       </div>
                     </div>
@@ -762,6 +784,9 @@ export default function Dashboard() {
                           
                           <div className="text-right">
                             <p className="text-xl font-bold text-white">${ride.final_price || ride.estimated_price}</p>
+                            {ride.status !== 'completed' && (
+                              <span className="mt-1 inline-block text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">Payment Pending</span>
+                            )}
                             <p className="text-sm text-white/50">Total fare</p>
                           </div>
                         </div>
