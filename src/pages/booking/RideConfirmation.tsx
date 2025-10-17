@@ -90,42 +90,161 @@ export default function RideConfirmation(): JSX.Element {
 				estimated_price: (bookingFlow as BookingFlowLocal).estimatedPrice,
 			};
 
-			const { data, error } = await createRide(rideData as any);
-			if (error || !data) {
-				throw new Error(typeof error === 'string' ? error : error?.message || 'Failed to create ride');
-			}
 
-			const storeRide: Ride = {
-				id: data.id,
-				pickup: data.pickup_location,
-				dropoff: data.dropoff_location,
-				vehicle: {
-					id: (databaseVehicle as any).id,
-					type: (databaseVehicle as any).type || 'sedan',
-					name: (databaseVehicle as any).name,
-					price: data.estimated_price,
-					eta: selectedVehicle.eta,
-					image: (databaseVehicle as any).image_url || '',
-					description: (databaseVehicle as any).description || '',
-				},
-				price: data.estimated_price,
-				status: 'upcoming',
-				date: new Date().toISOString().split('T')[0],
-			};
+      const { data, error } = await createRide(rideData);
 
-			setCurrentBooking(storeRide);
-			toast({ title: 'Ride booked!', description: 'Finding your driver...' });
-			navigate('/booking/searching');
-		} catch (err) {
-			toast({
-				variant: 'destructive',
-				title: 'Booking failed',
-				description: err instanceof Error ? err.message : 'Please try again.',
-			});
-		} finally {
-			setIsBooking(false);
-		}
-	};
+      if (error) {
+        console.error('Ride creation error:', error);
+        toast({
+          variant: "destructive",
+          title: "Booking Failed",
+          description: typeof error === 'string' ? error : error.message || 'Failed to create ride after payment',
+        });
+        setIsBooking(false);
+        return;
+      }
+
+      if (data) {
+        // Convert Supabase ride data to store Ride format
+        const storeRide: Ride = {
+          id: data.id,
+          pickup: data.pickup_location,
+          dropoff: data.dropoff_location,
+          vehicle: {
+            id: vehicleId,
+            type: selectedVehicle.type || 'luxury_sedan',
+            name: selectedVehicle.name,
+            price: data.estimated_price,
+            eta: selectedVehicle.eta,
+            image: selectedVehicle.image,
+            description: selectedVehicle.description
+          },
+          price: data.estimated_price,
+          status: 'upcoming',
+          date: new Date().toISOString().split('T')[0]
+        };
+        
+        setCurrentBooking(storeRide);
+        console.log('Booking created successfully:', storeRide);
+        
+        toast({
+          title: "Payment Successful!",
+          description: "Your ride has been booked. Finding your driver...",
+        });
+        
+        // Navigate to searching driver page
+        setTimeout(() => {
+          navigate('/booking/searching');
+        }, 500);
+      }
+    } catch (err) {
+      console.error('Post-payment booking error:', err);
+      toast({
+        variant: "destructive",
+        title: "Booking Failed",
+        description: err instanceof Error ? err.message : "Payment successful but ride booking failed. Please contact support.",
+      });
+      setIsBooking(false);
+    }
+  };
+
+  const handlePaymentFailure = (): void => {
+    console.log('Payment cancelled or failed');
+    setIsBooking(false);
+    toast({
+      variant: "destructive",
+      title: "Payment Cancelled",
+      description: "Your payment was not completed. Please try again.",
+    });
+  };
+
+  const initializeRazorpay = (): void => {
+    if (!razorpayLoaded || !window.Razorpay) {
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: "Payment gateway is not loaded. Please refresh and try again.",
+      });
+      setIsBooking(false);
+      return;
+    }
+
+    if (!bookingFlow?.selectedVehicle || !bookingFlow?.estimatedPrice) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Please select a vehicle first",
+      });
+      setIsBooking(false);
+      return;
+    }
+
+    const options: RazorpayOptions = {
+      key: 'rzp_live_RHW97oiHDY3dQq', // Your Razorpay key
+      amount: bookingFlow.estimatedPrice * 100, // Amount in paise (multiply by 100)
+      currency: 'INR',
+      name: 'ROLO Rides',
+      description: `Ride from ${bookingFlow.pickup} to ${bookingFlow.dropoff}`,
+      image: '/logo.png', // Add your app logo URL
+      handler: handlePaymentSuccess,
+      prefill: {
+        name: 'Rolo Pvt.Ltd',
+        email: 'team@rolorides.com',
+        contact: '8329472792'
+      },
+      notes: {
+        pickup: bookingFlow.pickup,
+        dropoff: bookingFlow.dropoff,
+        vehicle: bookingFlow.selectedVehicle.name,
+        vehicle_id: bookingFlow.selectedVehicle.id
+      },
+      theme: {
+        color: '#00D1C1'
+      },
+      modal: {
+        ondismiss: handlePaymentFailure
+      }
+    };
+
+    const razorpayInstance = new window.Razorpay(options);
+    razorpayInstance.open();
+  };
+
+  const handleConfirmBooking = async (): Promise<void> => {
+    if (!bookingFlow?.selectedVehicle || !bookingFlow?.estimatedPrice) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Please select a vehicle first",
+      });
+      return;
+    }
+
+    if (!bookingFlow?.pickup || !bookingFlow?.dropoff) {
+      toast({
+        variant: "destructive",
+        title: "Booking Error",
+        description: "Please set pickup and dropoff locations",
+      });
+      return;
+    }
+
+    if (!razorpayLoaded) {
+      toast({
+        variant: "destructive",
+        title: "Payment Error",
+        description: "Payment gateway is loading. Please wait a moment and try again.",
+      });
+      return;
+    }
+
+    setIsBooking(true);
+    
+    // Add a small delay to show the loading state
+    setTimeout(() => {
+      initializeRazorpay();
+    }, 500);
+  };
 
 	const handleBack = (): void => {
 		navigate('/booking/vehicle');
